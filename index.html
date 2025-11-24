@@ -10,15 +10,79 @@
     
     body {
       font-family: 'Noto Sans KR', sans-serif;
-      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      background: linear-gradient(180deg, #0f1c3f 0%, #1a3a5c 50%, #2d5a7b 100%);
       min-height: 100vh;
       color: #fff;
+      overflow-x: hidden;
+      position: relative;
+    }
+    
+    /* 눈 내리는 효과 */
+    .snowflakes {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+    
+    .snowflake {
+      position: absolute;
+      top: -20px;
+      color: #fff;
+      font-size: 20px;
+      opacity: 0.8;
+      animation: fall linear infinite;
+    }
+    
+    @keyframes fall {
+      0% { transform: translateY(-20px) rotate(0deg); }
+      100% { transform: translateY(100vh) rotate(360deg); }
+    }
+    
+    /* 콘페티 효과 */
+    .confetti-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 200;
+      overflow: hidden;
+    }
+    
+    .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      opacity: 0;
+    }
+    
+    .confetti.active {
+      animation: confetti-fall 3s ease-out forwards;
+    }
+    
+    @keyframes confetti-fall {
+      0% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(100vh) rotate(720deg) scale(0.5);
+      }
     }
     
     .container {
       max-width: 420px;
       margin: 0 auto;
       padding: 20px;
+      position: relative;
+      z-index: 10;
     }
     
     .header {
@@ -27,28 +91,35 @@
     }
     
     .title {
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 900;
-      background: linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcf63);
+      color: #fff;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    
+    .title-highlight {
+      background: linear-gradient(135deg, #ff6b6b, #ffd93d);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
     }
     
     .subtitle {
-      font-size: 14px;
+      font-size: 15px;
       color: #ffd93d;
-      margin-top: 8px;
+      margin-top: 10px;
+      text-shadow: 0 1px 5px rgba(0,0,0,0.3);
     }
     
     .notice {
       font-size: 12px;
-      color: #ff6b6b;
-      background: rgba(255,107,107,0.15);
-      padding: 5px 15px;
+      color: #fff;
+      background: rgba(255,107,107,0.8);
+      padding: 6px 18px;
       border-radius: 20px;
       display: inline-block;
-      margin-top: 10px;
+      margin-top: 12px;
+      font-weight: 600;
     }
     
     .roulette-section {
@@ -64,12 +135,18 @@
     
     .pointer {
       position: absolute;
-      top: -15px;
+      top: -20px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 35px;
+      font-size: 40px;
       z-index: 10;
       filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+      animation: bounce 1s ease infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(5px); }
     }
     
     #wheel {
@@ -77,54 +154,58 @@
       height: 320px;
       border-radius: 50%;
       box-shadow: 
-        0 0 0 8px #2d2d44,
-        0 0 0 12px #ffd93d,
-        0 0 40px rgba(255,217,61,0.3);
+        0 0 0 10px #c41e3a,
+        0 0 0 16px #228b22,
+        0 0 0 20px #c41e3a,
+        0 0 50px rgba(255,215,0,0.4);
     }
     
     .spin-btn {
-      margin-top: 25px;
-      padding: 15px 50px;
-      font-size: 18px;
+      margin-top: 30px;
+      padding: 18px 55px;
+      font-size: 20px;
       font-weight: 700;
       color: #fff;
-      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
-      border: none;
+      background: linear-gradient(135deg, #c41e3a, #a01830);
+      border: 3px solid #ffd700;
       border-radius: 50px;
       cursor: pointer;
-      box-shadow: 0 5px 20px rgba(255,107,107,0.4);
+      box-shadow: 0 5px 25px rgba(196,30,58,0.5);
       transition: transform 0.2s, box-shadow 0.2s;
     }
     
     .spin-btn:hover {
       transform: scale(1.05);
-      box-shadow: 0 8px 25px rgba(255,107,107,0.5);
+      box-shadow: 0 8px 30px rgba(196,30,58,0.6);
     }
     
     .spin-btn:disabled {
       background: #555;
+      border-color: #888;
       cursor: not-allowed;
       box-shadow: none;
       transform: none;
     }
     
     .info-section {
-      background: rgba(255,255,255,0.05);
-      border-radius: 15px;
-      padding: 20px;
-      margin-top: 20px;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 25px;
+      margin-top: 25px;
+      border: 1px solid rgba(255,255,255,0.2);
     }
     
     .info-section h3 {
-      font-size: 14px;
-      color: #ffd93d;
-      margin-bottom: 12px;
+      font-size: 15px;
+      color: #ffd700;
+      margin-bottom: 15px;
     }
     
     .info-section p {
-      font-size: 12px;
-      color: #888;
-      line-height: 1.8;
+      font-size: 13px;
+      color: rgba(255,255,255,0.85);
+      line-height: 2;
     }
     
     .info-section strong {
@@ -147,14 +228,15 @@
     .modal.show { display: flex; }
     
     .modal-box {
-      background: linear-gradient(180deg, #1a1a2e, #16213e);
-      border: 2px solid #ffd93d;
+      background: linear-gradient(180deg, #1a3a5c, #0f1c3f);
+      border: 3px solid #ffd700;
       border-radius: 25px;
-      padding: 35px 25px;
+      padding: 40px 30px;
       text-align: center;
-      max-width: 320px;
+      max-width: 340px;
       width: 100%;
       animation: popIn 0.4s ease;
+      box-shadow: 0 0 50px rgba(255,215,0,0.3);
     }
     
     @keyframes popIn {
@@ -162,75 +244,116 @@
       100% { transform: scale(1); opacity: 1; }
     }
     
-    .modal-emoji { font-size: 50px; }
+    .modal-emoji { font-size: 55px; }
     
     .modal-title {
-      font-size: 24px;
-      color: #ff6b6b;
+      font-size: 26px;
+      color: #ffd700;
       margin: 15px 0;
+      text-shadow: 0 2px 10px rgba(255,215,0,0.3);
     }
     
     .modal-prize {
       background: rgba(255,255,255,0.1);
-      border-radius: 15px;
-      padding: 20px;
-      margin: 15px 0;
+      border-radius: 20px;
+      padding: 25px;
+      margin: 20px 0;
     }
     
     .modal-prize img {
-      width: 120px;
-      height: 120px;
+      width: 130px;
+      height: 130px;
       object-fit: contain;
-      border-radius: 10px;
+      border-radius: 15px;
       background: #fff;
       padding: 10px;
+      box-shadow: 0 5px 20px rgba(0,0,0,0.3);
     }
     
     .modal-prize-text {
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 900;
-      color: #ffd93d;
-      margin-top: 10px;
+      color: #fff;
+      margin-top: 15px;
     }
     
     .modal-desc {
-      font-size: 13px;
-      color: #aaa;
-      margin-bottom: 20px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.8);
+      margin-bottom: 25px;
     }
     
     .modal-btn {
       display: block;
       width: 100%;
-      padding: 15px;
-      font-size: 16px;
+      padding: 18px;
+      font-size: 18px;
       font-weight: 700;
       color: #fff;
-      background: linear-gradient(135deg, #6bcf63, #4CAF50);
-      border: none;
+      background: linear-gradient(135deg, #228b22, #1a6b1a);
+      border: 2px solid #90ee90;
       border-radius: 50px;
       cursor: pointer;
-      box-shadow: 0 5px 15px rgba(107,207,99,0.4);
+      box-shadow: 0 5px 20px rgba(34,139,34,0.4);
+      transition: transform 0.2s;
+    }
+    
+    .modal-btn:hover {
+      transform: scale(1.03);
     }
     
     .modal-timer {
-      margin-top: 15px;
-      font-size: 12px;
+      margin-top: 18px;
+      font-size: 13px;
       color: #ff6b6b;
+    }
+    
+    .modal-note {
+      margin-top: 12px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+    }
+    
+    /* 장식 */
+    .deco {
+      position: absolute;
+      font-size: 30px;
+      opacity: 0.6;
+    }
+    .deco-1 { top: 10%; left: 5%; animation: float 3s ease-in-out infinite; }
+    .deco-2 { top: 15%; right: 8%; animation: float 3.5s ease-in-out infinite; }
+    .deco-3 { bottom: 20%; left: 8%; animation: float 4s ease-in-out infinite; }
+    .deco-4 { bottom: 15%; right: 5%; animation: float 3.2s ease-in-out infinite; }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
     }
   </style>
 </head>
 <body>
+  <!-- 눈 내리는 효과 -->
+  <div class="snowflakes" id="snowflakes"></div>
+  
+  <!-- 콘페티 컨테이너 -->
+  <div class="confetti-container" id="confetti-container"></div>
+  
+  <!-- 장식 -->
+  <div class="deco deco-1">🎄</div>
+  <div class="deco deco-2">⭐</div>
+  <div class="deco deco-3">🎁</div>
+  <div class="deco deco-4">🔔</div>
+  
   <div class="container">
     <header class="header">
-      <h1 class="title">🎄 크리스마스 룰렛 🎅</h1>
+      <h1 class="title">🎄 <span class="title-highlight">크리스마스 룰렛</span> 🎅</h1>
       <p class="subtitle">100% 당첨! 지금 바로 돌려보세요</p>
       <p class="notice">※ 신규 회원 전용 이벤트</p>
     </header>
     
     <section class="roulette-section">
       <div class="wheel-wrapper">
-        <div class="pointer">🔻</div>
+        <div class="pointer">📍</div>
         <canvas id="wheel"></canvas>
       </div>
       <button id="spinBtn" class="spin-btn">🎰 룰렛 돌리기</button>
@@ -258,6 +381,7 @@
       <p class="modal-desc">앱 설치하고 바로 받아가세요!</p>
       <button id="downloadBtn" class="modal-btn">🎁 지금 받으러 가기</button>
       <p class="modal-timer">⏰ 24시간 내 설치 시 유효</p>
+      <p class="modal-note">※ 현재 Android만 지원됩니다</p>
     </div>
   </div>
 
@@ -266,29 +390,90 @@
     // 🔧 설정
     // ============================================
     const CONFIG = {
-      ONELINK_BASE: 'https://goldstep.onelink.me/abcd',
-      PLAYSTORE_URL: 'https://play.google.com/store/apps/details?id=com.goldstep'
+      // ✅ 앱스플라이어 OneLink URL (적용 완료!)
+      ONELINK_BASE: 'https://goldstep.onelink.me/3a1d/ybq9vmeu',
+      
+      // 플레이스토어 URL (폴백용)
+      PLAYSTORE_URL: 'https://play.google.com/store/apps/details?id=com.goldmanbo.circle&hl=ko',
+      
+      // 캠페인 정보
+      CAMPAIGN: 'christmas_roulette_2025',
+      MEDIA_SOURCE: 'web_roulette'
     };
 
     // ============================================
     // 🎁 상품 데이터 (6개)
     // ============================================
     const PRIZES = [
-      { id: 'top',      text: 'TOP',        image: 'images/top.png',      color: '#8B4513', prob: 25 },
-      { id: 'ramen',    text: '진라면',      image: 'images/ramen.png',    color: '#e74c3c', prob: 25 },
-      { id: 'hotbreak', text: '핫브레이크',  image: 'images/hotbreak.png', color: '#9b59b6', prob: 20 },
-      { id: 'icecream', text: '아이스크림',  image: 'images/icecream.png', color: '#3498db', prob: 15 },
-      { id: 'wang',     text: '왕뚜껑',      image: 'images/wang.png',     color: '#e67e22', prob: 10 },
-      { id: 'choco',    text: '초코송이',    image: 'images/choco.png',    color: '#27ae60', prob: 5 }
+      { id: 'top',      text: 'TOP',        image: 'images/top.png',      prob: 25 },
+      { id: 'ramen',    text: '진라면',      image: 'images/ramen.png',    prob: 25 },
+      { id: 'hotbreak', text: '핫브레이크',  image: 'images/hotbreak.png', prob: 20 },
+      { id: 'icecream', text: '아이스크림',  image: 'images/icecream.png', prob: 15 },
+      { id: 'wang',     text: '왕뚜껑',      image: 'images/wang.png',     prob: 10 },
+      { id: 'choco',    text: '초코송이',    image: 'images/choco.png',    prob: 5 }
     ];
 
+    const WHEEL_COLORS = ['#ffffff', '#e8e8e8', '#ffffff', '#e8e8e8', '#ffffff', '#e8e8e8'];
+
     // ============================================
-    // 🎨 고해상도 캔버스 설정 (레티나 대응)
+    // ❄️ 눈 내리는 효과
+    // ============================================
+    function createSnowflakes() {
+      const container = document.getElementById('snowflakes');
+      const snowflakeChars = ['❄', '❅', '❆', '✦', '•'];
+      
+      for (let i = 0; i < 50; i++) {
+        const snowflake = document.createElement('div');
+        snowflake.className = 'snowflake';
+        snowflake.textContent = snowflakeChars[Math.floor(Math.random() * snowflakeChars.length)];
+        snowflake.style.left = Math.random() * 100 + '%';
+        snowflake.style.fontSize = (Math.random() * 15 + 10) + 'px';
+        snowflake.style.opacity = Math.random() * 0.6 + 0.2;
+        snowflake.style.animationDuration = (Math.random() * 5 + 5) + 's';
+        snowflake.style.animationDelay = (Math.random() * 10) + 's';
+        container.appendChild(snowflake);
+      }
+    }
+    createSnowflakes();
+
+    // ============================================
+    // 🎊 콘페티 효과
+    // ============================================
+    function createConfetti() {
+      const container = document.getElementById('confetti-container');
+      container.innerHTML = '';
+      
+      const colors = ['#ff6b6b', '#ffd93d', '#6bcf63', '#4dabf7', '#cc5de8', '#ff922b', '#fff'];
+      const shapes = ['■', '●', '▲', '★', '♦', '●'];
+      
+      for (let i = 0; i < 100; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.textContent = shapes[Math.floor(Math.random() * shapes.length)];
+        confetti.style.left = Math.random() * 100 + '%';
+        confetti.style.top = '-20px';
+        confetti.style.color = colors[Math.floor(Math.random() * colors.length)];
+        confetti.style.fontSize = (Math.random() * 15 + 10) + 'px';
+        confetti.style.animationDelay = (Math.random() * 0.5) + 's';
+        confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+        container.appendChild(confetti);
+        
+        setTimeout(() => {
+          confetti.classList.add('active');
+        }, 50);
+      }
+      
+      setTimeout(() => {
+        container.innerHTML = '';
+      }, 4000);
+    }
+
+    // ============================================
+    // 🎨 고해상도 캔버스 설정
     // ============================================
     const canvas = document.getElementById('wheel');
     const ctx = canvas.getContext('2d');
     
-    // 레티나 대응: 2배 해상도
     const displaySize = 320;
     const scale = 2;
     canvas.width = displaySize * scale;
@@ -327,37 +512,41 @@
         const startAngle = currentAngle + i * sliceAngle;
         const endAngle = startAngle + sliceAngle;
         
-        // 조각 그리기
+        // 조각 그리기 (흰/회색)
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
-        ctx.fillStyle = prize.color;
+        ctx.fillStyle = WHEEL_COLORS[i];
         ctx.fill();
-        ctx.strokeStyle = '#1a1a2e';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
         ctx.stroke();
         
-        // 이미지 그리기 (크게!)
+        // 이미지 그리기
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startAngle + sliceAngle / 2);
         
-        const imgSize = 55; // 이미지 크기 키움!
-        const imgX = radius - 90;
+        const imgSize = 65;
+        const imgX = radius - 100;
         const imgY = -imgSize / 2;
         
         if (prizeImages[i] && prizeImages[i].complete && prizeImages[i].naturalWidth > 0) {
-          // 이미지 배경 (흰색 원)
+          ctx.shadowColor = 'rgba(0,0,0,0.2)';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetY = 3;
+          
           ctx.beginPath();
-          ctx.arc(imgX + imgSize/2, 0, imgSize/2 + 4, 0, 2 * Math.PI);
+          ctx.arc(imgX + imgSize/2, 0, imgSize/2 + 5, 0, 2 * Math.PI);
           ctx.fillStyle = '#fff';
           ctx.fill();
+          
+          ctx.shadowColor = 'transparent';
           ctx.strokeStyle = '#ddd';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 2;
           ctx.stroke();
           
-          // 이미지 (원형 클리핑)
           ctx.save();
           ctx.beginPath();
           ctx.arc(imgX + imgSize/2, 0, imgSize/2, 0, 2 * Math.PI);
@@ -370,19 +559,21 @@
       });
       
       // 중앙 원
+      ctx.shadowColor = 'rgba(0,0,0,0.3)';
+      ctx.shadowBlur = 10;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
-      ctx.fillStyle = '#ffd93d';
+      ctx.arc(centerX, centerY, 35, 0, 2 * Math.PI);
+      ctx.fillStyle = '#c41e3a';
       ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 3;
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 4;
       ctx.stroke();
       
-      // 중앙 텍스트
-      ctx.fillStyle = '#1a1a2e';
-      ctx.font = 'bold 12px Noto Sans KR';
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Noto Sans KR';
       ctx.textAlign = 'center';
-      ctx.fillText('SPIN', centerX, centerY + 4);
+      ctx.fillText('SPIN', centerX, centerY + 5);
     }
 
     setTimeout(drawWheel, 100);
@@ -398,6 +589,35 @@
         if (rand <= 0) return prize;
       }
       return PRIZES[0];
+    }
+
+    // ============================================
+    // 📱 디바이스 감지
+    // ============================================
+    function isAndroid() {
+      return /Android/i.test(navigator.userAgent);
+    }
+    
+    function isIOS() {
+      return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    // ============================================
+    // 🔗 앱스플라이어 OneLink URL 생성
+    // ============================================
+    function generateOneLinkUrl(prize) {
+      const params = new URLSearchParams({
+        // 앱스플라이어 어트리뷰션 파라미터
+        pid: CONFIG.MEDIA_SOURCE,
+        c: CONFIG.CAMPAIGN,
+        
+        // 딥링크 파라미터 (앱에서 받을 데이터)
+        deep_link_value: 'christmas_event',
+        deep_link_sub1: prize.id,
+        deep_link_sub2: prize.text
+      });
+      
+      return `${CONFIG.ONELINK_BASE}?${params.toString()}`;
     }
 
     // ============================================
@@ -448,13 +668,27 @@
     // 🎊 결과 모달
     // ============================================
     function showModal(prize) {
+      // 콘페티 효과!
+      createConfetti();
+      
       document.getElementById('prizeImg').src = prize.image;
       document.getElementById('prizeText').textContent = prize.text + ' 당첨!';
       document.getElementById('modal').classList.add('show');
       
+      // 다운로드 버튼 클릭
       document.getElementById('downloadBtn').onclick = () => {
-        const url = `${CONFIG.ONELINK_BASE}?product_id=${prize.id}&product_name=${encodeURIComponent(prize.text)}`;
-        window.location.href = url;
+        if (isAndroid()) {
+          // 안드로이드: OneLink로 이동
+          const oneLinkUrl = generateOneLinkUrl(prize);
+          console.log('OneLink URL:', oneLinkUrl); // 디버깅용
+          window.location.href = oneLinkUrl;
+        } else if (isIOS()) {
+          // iOS: 준비 중 안내
+          alert('iOS 버전은 준비 중입니다! 🙏\n조금만 기다려주세요.');
+        } else {
+          // PC: 플레이스토어로 이동
+          window.location.href = CONFIG.PLAYSTORE_URL;
+        }
       };
     }
   </script>
