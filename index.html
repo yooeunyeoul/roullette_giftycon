@@ -390,7 +390,7 @@
     // 🔧 설정
     // ============================================
     const CONFIG = {
-      // ✅ 앱스플라이어 OneLink URL (적용 완료!)
+      // ✅ 앱스플라이어 OneLink URL
       ONELINK_BASE: 'https://goldstep.onelink.me/3a1d/ybq9vmeu',
       
       // 플레이스토어 URL (폴백용)
@@ -402,15 +402,15 @@
     };
 
     // ============================================
-    // 🎁 상품 데이터 (6개)
+    // 🎁 상품 데이터 (6개) - 최종 확정!
     // ============================================
     const PRIZES = [
-      { id: 'top',      text: 'TOP',        image: 'images/top.png',      prob: 25 },
-      { id: 'ramen',    text: '진라면',      image: 'images/ramen.png',    prob: 25 },
-      { id: 'hotbreak', text: '핫브레이크',  image: 'images/hotbreak.png', prob: 20 },
-      { id: 'icecream', text: '아이스크림',  image: 'images/icecream.png', prob: 15 },
-      { id: 'wang',     text: '왕뚜껑',      image: 'images/wang.png',     prob: 10 },
-      { id: 'choco',    text: '초코송이',    image: 'images/choco.png',    prob: 5 }
+      { id: 'shinramen',   text: '신라면 소컵',     image: 'images/shinramen.png',   price: 1170, prob: 18 },
+      { id: 'jayusigan',   text: '자유시간',        image: 'images/jayusigan.png',   price: 1120, prob: 18 },
+      { id: 'kimchi',      text: '김치 사발면',     image: 'images/kimchi.png',      price: 1030, prob: 18 },
+      { id: 'yukgaejang',  text: '육개장 사발면',   image: 'images/yukgaejang.png',  price: 1030, prob: 18 },
+      { id: 'gatorade',    text: '게토레이 레몬',   image: 'images/gatorade.png',    price: 1120, prob: 14 },
+      { id: 'chocosongyi', text: '초코송이',        image: 'images/chocosongyi.png', price: 1120, prob: 14 }
     ];
 
     const WHEEL_COLORS = ['#ffffff', '#e8e8e8', '#ffffff', '#e8e8e8', '#ffffff', '#e8e8e8'];
@@ -614,7 +614,8 @@
         // 딥링크 파라미터 (앱에서 받을 데이터)
         deep_link_value: 'christmas_event',
         deep_link_sub1: prize.id,
-        deep_link_sub2: prize.text
+        deep_link_sub2: prize.text,
+        deep_link_sub3: prize.price
       });
       
       return `${CONFIG.ONELINK_BASE}?${params.toString()}`;
@@ -680,7 +681,7 @@
         if (isAndroid()) {
           // 안드로이드: OneLink로 이동
           const oneLinkUrl = generateOneLinkUrl(prize);
-          console.log('OneLink URL:', oneLinkUrl); // 디버깅용
+          console.log('OneLink URL:', oneLinkUrl);
           window.location.href = oneLinkUrl;
         } else if (isIOS()) {
           // iOS: 준비 중 안내
