@@ -728,7 +728,7 @@
         
         // 조각 중앙으로 이동
         const midAngle = startAngle + sliceAngle / 2;
-        const imgDistance = radius - 80;
+        const imgDistance = radius - 55;
         const imgX = Math.cos(midAngle) * imgDistance;
         const imgY = Math.sin(midAngle) * imgDistance;
         
@@ -737,7 +737,7 @@
         // ⭐ 핵심: 이미지를 정면으로 유지 (역회전)
         ctx.rotate(-currentAngle);
         
-        const imgSize = 70;
+        const imgSize = 85;
         
         if (prizeImages[i] && prizeImages[i].complete && prizeImages[i].naturalWidth > 0) {
           // 이미지 배경 (흰색 원)
