@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🎄 골드스텝 크리스마스 룰렛</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 헤더 -->
+    <header class="header">
+      <div class="snow">❄️</div>
+      <h1 class="title">
+        <span class="emoji">🎄</span>
+        크리스마스 룰렛
+        <span class="emoji">🎅</span>
+      </h1>
+      <p class="subtitle">100% 당첨! 지금 바로 돌려보세요</p>
+      <p class="notice">※ 신규 회원 전용 이벤트</p>
+    </header>
+
+    <!-- 룰렛 섹션 -->
+    <section class="roulette-section">
+      <div class="roulette-wrapper">
+        <div class="roulette-pointer">▼</div>
+        <canvas id="wheel" width="320" height="320"></canvas>
+        <button id="spin-btn" class="spin-btn">
+          <span>CLICK</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 상품 목록 -->
+    <section class="prizes-section">
+      <h2>🎁 이벤트 상품</h2>
+      <div class="prizes-grid">
+        <div class="prize-item">
+          <img src="images/starbucks.png" alt="스타벅스" onerror="this.src='https://via.placeholder.com/60x60?text=☕'">
+          <span>스타벅스</span>
+        </div>
+        <div class="prize-item">
+          <img src="images/cu.png" alt="CU상품권" onerror="this.src='https://via.placeholder.com/60x60?text=CU'">
+          <span>CU 상품권</span>
+        </div>
+        <div class="prize-item">
+          <img src="images/ramen.png" alt="진라면" onerror="this.src='https://via.placeholder.com/60x60?text=🍜'">
+          <span>진라면</span>
+        </div>
+        <div class="prize-item">
+          <img src="images/coffee.png" alt="편의점커피" onerror="this.src='https://via.placeholder.com/60x60?text=☕'">
+          <span>편의점 커피</span>
+        </div>
+        <div class="prize-item point-item">
+          <div class="point-icon">P</div>
+          <span>포인트</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 유의사항 -->
+    <section class="notice-section">
+      <h3>📌 유의사항</h3>
+      <ul>
+        <li>본 이벤트는 <strong>신규 회원 전용</strong>입니다.</li>
+        <li>룰렛 참여 후, 골드스텝 앱 설치 및 가입 시 상품이 지급됩니다.</li>
+        <li>당첨 상품은 앱 내 포인트로 지급되며, 기프티콘으로 교환 가능합니다.</li>
+        <li>이벤트 기간: 2024.12.1 ~ 2024.12.25</li>
+        <li>부정 참여 시 당첨이 취소될 수 있습니다.</li>
+      </ul>
+    </section>
+
+    <!-- 푸터 -->
+    <footer class="footer">
+      <p>© 2024 골드스텝. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <!-- 결과 모달 -->
+  <div id="result-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-fireworks">🎉</div>
+      <h2>축하해요!</h2>
+      <div class="prize-result">
+        <img id="result-image" src="" alt="당첨 상품">
+        <p id="result-text"></p>
+      </div>
+      <p class="modal-desc">앱 설치하고 바로 받아가세요!</p>
+      <a id="download-btn" href="#" class="download-btn">
+        🎁 지금 받으러 가기
+      </a>
+      <p class="modal-timer">⏰ <span id="timer">24:00:00</span> 내 설치 시 유효</p>
+    </div>
+  </div>
+
+  <!-- Winwheel.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/winwheel@1.0.0/dist/Winwheel.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
