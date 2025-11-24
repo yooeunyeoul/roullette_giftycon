@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>🎄 골드스텝 크리스마스 룰렛</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&family=Jua&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     
     body {
-      font-family: 'Noto Sans KR', sans-serif;
-      background: linear-gradient(180deg, #0f1c3f 0%, #1a3a5c 50%, #2d5a7b 100%);
+      font-family: 'Jua', 'Noto Sans KR', sans-serif;
+      background: linear-gradient(180deg, #1e3c72 0%, #2a5298 50%, #4a7bb7 100%);
       min-height: 100vh;
       color: #fff;
       overflow-x: hidden;
@@ -91,42 +91,38 @@
     }
     
     .title {
-      font-size: 28px;
+      font-size: 32px;
       font-weight: 900;
       color: #fff;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      text-shadow: 3px 3px 0 #c41e3a, 5px 5px 0 rgba(0,0,0,0.2);
+      animation: title-bounce 2s ease-in-out infinite;
     }
     
-    .title-highlight {
+    @keyframes title-bounce {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    
+    .subtitle {
+      font-size: 18px;
+      color: #ffd93d;
+      margin-top: 10px;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+    }
+    
+    .subtitle .highlight {
       background: linear-gradient(135deg, #ff6b6b, #ffd93d);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
-    }
-    
-    .subtitle {
-      font-size: 15px;
-      color: #ffd93d;
-      margin-top: 10px;
-      text-shadow: 0 1px 5px rgba(0,0,0,0.3);
-    }
-    
-    .notice {
-      font-size: 12px;
-      color: #fff;
-      background: rgba(255,107,107,0.8);
-      padding: 6px 18px;
-      border-radius: 20px;
-      display: inline-block;
-      margin-top: 12px;
-      font-weight: 600;
+      font-size: 22px;
     }
     
     .roulette-section {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 30px 0;
+      padding: 25px 0;
     }
     
     .wheel-wrapper {
@@ -135,18 +131,18 @@
     
     .pointer {
       position: absolute;
-      top: -20px;
+      top: -25px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 40px;
+      font-size: 45px;
       z-index: 10;
-      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
-      animation: bounce 1s ease infinite;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+      animation: pointer-bounce 0.5s ease-in-out infinite;
     }
     
-    @keyframes bounce {
+    @keyframes pointer-bounce {
       0%, 100% { transform: translateX(-50%) translateY(0); }
-      50% { transform: translateX(-50%) translateY(5px); }
+      50% { transform: translateX(-50%) translateY(8px); }
     }
     
     #wheel {
@@ -154,62 +150,191 @@
       height: 320px;
       border-radius: 50%;
       box-shadow: 
-        0 0 0 10px #c41e3a,
-        0 0 0 16px #228b22,
-        0 0 0 20px #c41e3a,
-        0 0 50px rgba(255,215,0,0.4);
+        0 0 0 12px #ff6b6b,
+        0 0 0 18px #ffd93d,
+        0 0 0 24px #6bcf63,
+        0 0 0 30px #4dabf7,
+        0 0 60px rgba(255,107,107,0.5);
+      animation: wheel-glow 2s ease-in-out infinite alternate;
+    }
+    
+    @keyframes wheel-glow {
+      0% { box-shadow: 0 0 0 12px #ff6b6b, 0 0 0 18px #ffd93d, 0 0 0 24px #6bcf63, 0 0 0 30px #4dabf7, 0 0 40px rgba(255,107,107,0.4); }
+      100% { box-shadow: 0 0 0 12px #ff6b6b, 0 0 0 18px #ffd93d, 0 0 0 24px #6bcf63, 0 0 0 30px #4dabf7, 0 0 80px rgba(255,217,61,0.6); }
     }
     
     .spin-btn {
-      margin-top: 30px;
-      padding: 18px 55px;
-      font-size: 20px;
+      margin-top: 35px;
+      padding: 20px 60px;
+      font-size: 24px;
       font-weight: 700;
+      font-family: 'Jua', sans-serif;
       color: #fff;
-      background: linear-gradient(135deg, #c41e3a, #a01830);
-      border: 3px solid #ffd700;
-      border-radius: 50px;
+      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+      border: 4px solid #fff;
+      border-radius: 60px;
       cursor: pointer;
-      box-shadow: 0 5px 25px rgba(196,30,58,0.5);
-      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 
+        0 6px 0 #c0392b,
+        0 10px 20px rgba(0,0,0,0.3);
+      transition: all 0.1s;
+      animation: btn-wiggle 3s ease-in-out infinite;
+    }
+    
+    @keyframes btn-wiggle {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-2deg); }
+      75% { transform: rotate(2deg); }
     }
     
     .spin-btn:hover {
-      transform: scale(1.05);
-      box-shadow: 0 8px 30px rgba(196,30,58,0.6);
+      transform: translateY(-3px);
+      box-shadow: 
+        0 9px 0 #c0392b,
+        0 15px 30px rgba(0,0,0,0.4);
+    }
+    
+    .spin-btn:active {
+      transform: translateY(3px);
+      box-shadow: 
+        0 3px 0 #c0392b,
+        0 5px 10px rgba(0,0,0,0.3);
     }
     
     .spin-btn:disabled {
-      background: #555;
-      border-color: #888;
+      background: #888;
+      border-color: #666;
+      box-shadow: 0 4px 0 #555;
+      animation: none;
       cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
     }
     
-    .info-section {
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
-      border-radius: 20px;
+    /* 말풍선 스타일 유의사항 */
+    .notice-section {
+      background: #fff;
+      color: #333;
+      border-radius: 25px;
       padding: 25px;
       margin-top: 25px;
-      border: 1px solid rgba(255,255,255,0.2);
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
     
-    .info-section h3 {
-      font-size: 15px;
-      color: #ffd700;
+    .notice-section::before {
+      content: '';
+      position: absolute;
+      top: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-bottom: 15px solid #fff;
+    }
+    
+    .notice-section h3 {
+      font-size: 18px;
+      color: #e74c3c;
       margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     
-    .info-section p {
+    .notice-section h3 .icon {
+      font-size: 24px;
+      animation: shake 0.5s ease-in-out infinite;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-10deg); }
+      75% { transform: rotate(10deg); }
+    }
+    
+    .notice-list {
+      list-style: none;
+      font-size: 14px;
+      line-height: 2.2;
+    }
+    
+    .notice-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    
+    .notice-list li::before {
+      content: '✓';
+      color: #27ae60;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    
+    .notice-list .highlight-box {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      padding: 3px 10px;
+      border-radius: 8px;
       font-size: 13px;
-      color: rgba(255,255,255,0.85);
-      line-height: 2;
     }
     
-    .info-section strong {
-      color: #ff6b6b;
+    .notice-list .warning {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+    
+    .notice-list .warning::before {
+      content: '⚡';
+    }
+    
+    .notice-period {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 15px;
+      margin-top: 15px;
+      text-align: center;
+      font-size: 15px;
+    }
+    
+    .notice-period .date {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    
+    .early-end {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 15px;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 14px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.02); }
+    }
+    
+    /* 장식 */
+    .deco {
+      position: fixed;
+      font-size: 40px;
+      opacity: 0.8;
+      animation: float 3s ease-in-out infinite;
+    }
+    .deco-1 { top: 8%; left: 3%; animation-delay: 0s; }
+    .deco-2 { top: 12%; right: 5%; animation-delay: 0.5s; }
+    .deco-3 { bottom: 25%; left: 5%; animation-delay: 1s; }
+    .deco-4 { bottom: 20%; right: 3%; animation-delay: 1.5s; }
+    .deco-5 { top: 40%; left: 2%; animation-delay: 2s; font-size: 30px; }
+    .deco-6 { top: 50%; right: 2%; animation-delay: 2.5s; font-size: 30px; }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-15px) rotate(10deg); }
     }
     
     /* 모달 */
@@ -223,64 +348,118 @@
       align-items: center;
       z-index: 100;
       padding: 20px;
+      overflow-y: auto;
     }
     
     .modal.show { display: flex; }
     
     .modal-box {
-      background: linear-gradient(180deg, #1a3a5c, #0f1c3f);
-      border: 3px solid #ffd700;
-      border-radius: 25px;
-      padding: 40px 30px;
+      background: linear-gradient(180deg, #fff, #f8f9fa);
+      border-radius: 30px;
+      padding: 35px 25px;
       text-align: center;
       max-width: 340px;
       width: 100%;
-      animation: popIn 0.4s ease;
-      box-shadow: 0 0 50px rgba(255,215,0,0.3);
+      animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
     }
     
     @keyframes popIn {
-      0% { transform: scale(0.7); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
+      0% { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
     }
     
-    .modal-emoji { font-size: 55px; }
+    .modal-emoji { 
+      font-size: 60px; 
+      animation: celebrate 0.5s ease-in-out infinite alternate;
+    }
+    
+    @keyframes celebrate {
+      0% { transform: scale(1) rotate(-5deg); }
+      100% { transform: scale(1.1) rotate(5deg); }
+    }
     
     .modal-title {
-      font-size: 26px;
-      color: #ffd700;
+      font-size: 28px;
+      color: #e74c3c;
       margin: 15px 0;
-      text-shadow: 0 2px 10px rgba(255,215,0,0.3);
+      font-family: 'Jua', sans-serif;
     }
     
     .modal-prize {
-      background: rgba(255,255,255,0.1);
+      background: linear-gradient(135deg, #667eea, #764ba2);
       border-radius: 20px;
       padding: 25px;
-      margin: 20px 0;
+      margin: 15px 0;
     }
     
     .modal-prize img {
-      width: 130px;
-      height: 130px;
+      width: 100px;
+      height: 100px;
       object-fit: contain;
       border-radius: 15px;
       background: #fff;
       padding: 10px;
-      box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+      animation: prize-bounce 0.5s ease-in-out infinite alternate;
+    }
+    
+    @keyframes prize-bounce {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-5px); }
     }
     
     .modal-prize-text {
       font-size: 24px;
       font-weight: 900;
       color: #fff;
-      margin-top: 15px;
+      margin-top: 12px;
+      font-family: 'Jua', sans-serif;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.2);
     }
     
-    .modal-desc {
+    .modal-cash-info {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 15px;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    
+    .modal-cash-info p {
+      font-size: 15px;
+      color: #856404;
+      line-height: 1.6;
+      margin: 0;
+    }
+    
+    .modal-cash-info .cash-amount {
+      font-size: 20px;
+      font-weight: bold;
+      color: #d63384;
+    }
+    
+    .modal-login-info {
+      background: #e8f4fd;
+      border: 2px solid #4dabf7;
+      border-radius: 15px;
+      padding: 15px;
+      margin: 15px 0;
+    }
+    
+    .modal-login-info p {
       font-size: 14px;
-      color: rgba(255,255,255,0.8);
-      margin-bottom: 25px;
+      color: #1864ab;
+      line-height: 1.6;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .modal-login-info .kakao-icon {
+      font-size: 22px;
     }
     
     .modal-btn {
@@ -289,45 +468,39 @@
       padding: 18px;
       font-size: 18px;
       font-weight: 700;
+      font-family: 'Jua', sans-serif;
       color: #fff;
-      background: linear-gradient(135deg, #228b22, #1a6b1a);
-      border: 2px solid #90ee90;
+      background: linear-gradient(135deg, #27ae60, #2ecc71);
+      border: none;
       border-radius: 50px;
       cursor: pointer;
-      box-shadow: 0 5px 20px rgba(34,139,34,0.4);
-      transition: transform 0.2s;
+      box-shadow: 
+        0 5px 0 #1e8449,
+        0 10px 20px rgba(39,174,96,0.3);
+      transition: all 0.1s;
+      margin-top: 10px;
     }
     
     .modal-btn:hover {
-      transform: scale(1.03);
+      transform: translateY(-2px);
+    }
+    
+    .modal-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 2px 0 #1e8449;
     }
     
     .modal-timer {
-      margin-top: 18px;
+      margin-top: 15px;
       font-size: 13px;
-      color: #ff6b6b;
+      color: #e74c3c;
+      font-weight: bold;
     }
     
     .modal-note {
-      margin-top: 12px;
+      margin-top: 8px;
       font-size: 11px;
-      color: rgba(255,255,255,0.5);
-    }
-    
-    /* 장식 */
-    .deco {
-      position: absolute;
-      font-size: 30px;
-      opacity: 0.6;
-    }
-    .deco-1 { top: 10%; left: 5%; animation: float 3s ease-in-out infinite; }
-    .deco-2 { top: 15%; right: 8%; animation: float 3.5s ease-in-out infinite; }
-    .deco-3 { bottom: 20%; left: 8%; animation: float 4s ease-in-out infinite; }
-    .deco-4 { bottom: 15%; right: 5%; animation: float 3.2s ease-in-out infinite; }
-    
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
+      color: #999;
     }
   </style>
 </head>
@@ -340,32 +513,41 @@
   
   <!-- 장식 -->
   <div class="deco deco-1">🎄</div>
-  <div class="deco deco-2">⭐</div>
+  <div class="deco deco-2">🎅</div>
   <div class="deco deco-3">🎁</div>
-  <div class="deco deco-4">🔔</div>
+  <div class="deco deco-4">⛄</div>
+  <div class="deco deco-5">🦌</div>
+  <div class="deco deco-6">🔔</div>
   
   <div class="container">
     <header class="header">
-      <h1 class="title">🎄 <span class="title-highlight">크리스마스 룰렛</span> 🎅</h1>
-      <p class="subtitle">100% 당첨! 지금 바로 돌려보세요</p>
-      <p class="notice">※ 신규 회원 전용 이벤트</p>
+      <h1 class="title">🎄 크리스마스 룰렛 🎅</h1>
+      <p class="subtitle"><span class="highlight">100% 당첨!</span> 꽝 없어요~</p>
     </header>
     
     <section class="roulette-section">
       <div class="wheel-wrapper">
-        <div class="pointer">📍</div>
+        <div class="pointer">👇</div>
         <canvas id="wheel"></canvas>
       </div>
-      <button id="spinBtn" class="spin-btn">🎰 룰렛 돌리기</button>
+      <button id="spinBtn" class="spin-btn">🎰 돌려돌려~!</button>
     </section>
     
-    <section class="info-section">
-      <h3>📌 유의사항</h3>
-      <p>
-        • 본 이벤트는 <strong>신규 회원 전용</strong>입니다.<br>
-        • 룰렛 참여 후 앱 설치 및 가입 시 상품 지급<br>
-        • 이벤트 기간: 2025.12.22 ~ 12.28
-      </p>
+    <section class="notice-section">
+      <h3><span class="icon">📢</span> 잠깐! 꼭 읽어주세요</h3>
+      <ul class="notice-list">
+        <li><strong>신규 회원 전용</strong> 이벤트예요!</li>
+        <li>당첨 상품은 <span class="highlight-box">💰 캐시로 즉시 지급!</span></li>
+        <li>지급된 캐시로 해당 상품을 구매할 수 있어요</li>
+        <li>앱 설치 후 <strong>카카오톡 로그인</strong> 필수!</li>
+        <li class="warning">선착순 조기 마감될 수 있어요!</li>
+      </ul>
+      <div class="notice-period">
+        📅 이벤트 기간: <span class="date">12.22 ~ 12.28</span>
+      </div>
+      <div class="early-end">
+        ⚡ 참여자 폭주 또는 물량 소진 시 조기 종료!
+      </div>
     </section>
   </div>
   
@@ -373,14 +555,24 @@
   <div id="modal" class="modal">
     <div class="modal-box">
       <div class="modal-emoji">🎉</div>
-      <h2 class="modal-title">축하합니다!</h2>
+      <h2 class="modal-title">와아~ 축하해요!</h2>
+      
       <div class="modal-prize">
         <img id="prizeImg" src="" alt="">
         <p id="prizeText" class="modal-prize-text"></p>
       </div>
-      <p class="modal-desc">앱 설치하고 바로 받아가세요!</p>
-      <button id="downloadBtn" class="modal-btn">🎁 지금 받으러 가기</button>
-      <p class="modal-timer">⏰ 24시간 내 설치 시 유효</p>
+      
+      <div class="modal-cash-info">
+        <p><span id="prizeName">자유시간</span>에 해당하는<br><span class="cash-amount" id="prizePrice">1,120</span> 캐시를<br>바로 지급해드립니다! 💰</p>
+      </div>
+      
+      <div class="modal-login-info">
+        <p><span class="kakao-icon">💬</span> 골드스텝 앱에서<br><strong>카카오톡 로그인</strong>을 하셔야<br>상품을 받을 수 있어요!</p>
+      </div>
+      
+      <button id="downloadBtn" class="modal-btn">🎁 지금 바로 당첨 선물 받으러가기</button>
+      
+      <p class="modal-timer">⏰ 24시간 안에 설치해야 유효해요!</p>
       <p class="modal-note">※ 현재 Android만 지원됩니다</p>
     </div>
   </div>
@@ -390,19 +582,14 @@
     // 🔧 설정
     // ============================================
     const CONFIG = {
-      // ✅ 앱스플라이어 OneLink URL
       ONELINK_BASE: 'https://goldstep.onelink.me/3a1d/ybq9vmeu',
-      
-      // 플레이스토어 URL (폴백용)
       PLAYSTORE_URL: 'https://play.google.com/store/apps/details?id=com.goldmanbo.circle&hl=ko',
-      
-      // 캠페인 정보
       CAMPAIGN: 'christmas_roulette_2025',
       MEDIA_SOURCE: 'web_roulette'
     };
 
     // ============================================
-    // 🎁 상품 데이터 (6개) - 최종 확정!
+    // 🎁 상품 데이터 (6개)
     // ============================================
     const PRIZES = [
       { id: 'shinramen',   text: '신라면 소컵',     image: 'images/shinramen.png',   price: 1170, prob: 18 },
@@ -413,14 +600,15 @@
       { id: 'chocosongyi', text: '초코송이',        image: 'images/chocosongyi.png', price: 1120, prob: 14 }
     ];
 
-    const WHEEL_COLORS = ['#ffffff', '#e8e8e8', '#ffffff', '#e8e8e8', '#ffffff', '#e8e8e8'];
+    // 무지개 파스텔 색상
+    const WHEEL_COLORS = ['#FFE5E5', '#FFF3E5', '#FFFDE5', '#E5FFE5', '#E5F3FF', '#F3E5FF'];
 
     // ============================================
     // ❄️ 눈 내리는 효과
     // ============================================
     function createSnowflakes() {
       const container = document.getElementById('snowflakes');
-      const snowflakeChars = ['❄', '❅', '❆', '✦', '•'];
+      const snowflakeChars = ['❄', '❅', '❆', '✦', '•', '⭐'];
       
       for (let i = 0; i < 50; i++) {
         const snowflake = document.createElement('div');
@@ -444,16 +632,16 @@
       container.innerHTML = '';
       
       const colors = ['#ff6b6b', '#ffd93d', '#6bcf63', '#4dabf7', '#cc5de8', '#ff922b', '#fff'];
-      const shapes = ['■', '●', '▲', '★', '♦', '●'];
+      const shapes = ['■', '●', '▲', '★', '♦', '♥', '🎉', '🎊'];
       
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < 120; i++) {
         const confetti = document.createElement('div');
         confetti.className = 'confetti';
         confetti.textContent = shapes[Math.floor(Math.random() * shapes.length)];
         confetti.style.left = Math.random() * 100 + '%';
         confetti.style.top = '-20px';
         confetti.style.color = colors[Math.floor(Math.random() * colors.length)];
-        confetti.style.fontSize = (Math.random() * 15 + 10) + 'px';
+        confetti.style.fontSize = (Math.random() * 20 + 10) + 'px';
         confetti.style.animationDelay = (Math.random() * 0.5) + 's';
         confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
         container.appendChild(confetti);
@@ -512,68 +700,86 @@
         const startAngle = currentAngle + i * sliceAngle;
         const endAngle = startAngle + sliceAngle;
         
-        // 조각 그리기 (흰/회색)
+        // 조각 그리기 (파스텔 색상)
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
         ctx.fillStyle = WHEEL_COLORS[i];
         ctx.fill();
-        ctx.strokeStyle = '#ccc';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
         ctx.stroke();
         
-        // 이미지 그리기
+        // 이미지 그리기 (정면으로 보정!)
         ctx.save();
         ctx.translate(centerX, centerY);
-        ctx.rotate(startAngle + sliceAngle / 2);
         
-        const imgSize = 65;
-        const imgX = radius - 100;
-        const imgY = -imgSize / 2;
+        // 조각 중앙으로 이동
+        const midAngle = startAngle + sliceAngle / 2;
+        const imgDistance = radius - 80;
+        const imgX = Math.cos(midAngle) * imgDistance;
+        const imgY = Math.sin(midAngle) * imgDistance;
+        
+        ctx.translate(imgX, imgY);
+        
+        // ⭐ 핵심: 이미지를 정면으로 유지 (역회전)
+        ctx.rotate(-currentAngle);
+        
+        const imgSize = 55;
         
         if (prizeImages[i] && prizeImages[i].complete && prizeImages[i].naturalWidth > 0) {
-          ctx.shadowColor = 'rgba(0,0,0,0.2)';
-          ctx.shadowBlur = 8;
-          ctx.shadowOffsetY = 3;
+          // 이미지 배경 (흰색 원)
+          ctx.shadowColor = 'rgba(0,0,0,0.15)';
+          ctx.shadowBlur = 10;
+          ctx.shadowOffsetY = 4;
           
           ctx.beginPath();
-          ctx.arc(imgX + imgSize/2, 0, imgSize/2 + 5, 0, 2 * Math.PI);
+          ctx.arc(0, 0, imgSize/2 + 6, 0, 2 * Math.PI);
           ctx.fillStyle = '#fff';
           ctx.fill();
           
           ctx.shadowColor = 'transparent';
-          ctx.strokeStyle = '#ddd';
-          ctx.lineWidth = 2;
+          
+          // 테두리
+          ctx.strokeStyle = WHEEL_COLORS[i];
+          ctx.lineWidth = 3;
           ctx.stroke();
           
+          // 이미지 (원형 클리핑)
           ctx.save();
           ctx.beginPath();
-          ctx.arc(imgX + imgSize/2, 0, imgSize/2, 0, 2 * Math.PI);
+          ctx.arc(0, 0, imgSize/2, 0, 2 * Math.PI);
           ctx.clip();
-          ctx.drawImage(prizeImages[i], imgX, imgY, imgSize, imgSize);
+          ctx.drawImage(prizeImages[i], -imgSize/2, -imgSize/2, imgSize, imgSize);
           ctx.restore();
         }
         
         ctx.restore();
       });
       
-      // 중앙 원
-      ctx.shadowColor = 'rgba(0,0,0,0.3)';
-      ctx.shadowBlur = 10;
+      // 중앙 원 (귀여운 버전)
+      ctx.shadowColor = 'rgba(0,0,0,0.2)';
+      ctx.shadowBlur = 15;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 35, 0, 2 * Math.PI);
-      ctx.fillStyle = '#c41e3a';
+      ctx.arc(centerX, centerY, 40, 0, 2 * Math.PI);
+      const gradient = ctx.createRadialGradient(centerX-10, centerY-10, 0, centerX, centerY, 40);
+      gradient.addColorStop(0, '#ff8a8a');
+      gradient.addColorStop(1, '#ff6b6b');
+      ctx.fillStyle = gradient;
       ctx.fill();
       ctx.shadowColor = 'transparent';
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 4;
+      
+      // 중앙 테두리
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 5;
       ctx.stroke();
       
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px Noto Sans KR';
+      // 중앙 이모지
+      ctx.font = '28px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('SPIN', centerX, centerY + 5);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🎁', centerX, centerY);
     }
 
     setTimeout(drawWheel, 100);
@@ -607,11 +813,8 @@
     // ============================================
     function generateOneLinkUrl(prize) {
       const params = new URLSearchParams({
-        // 앱스플라이어 어트리뷰션 파라미터
         pid: CONFIG.MEDIA_SOURCE,
         c: CONFIG.CAMPAIGN,
-        
-        // 딥링크 파라미터 (앱에서 받을 데이터)
         deep_link_value: 'christmas_event',
         deep_link_sub1: prize.id,
         deep_link_sub2: prize.text,
@@ -619,6 +822,13 @@
       });
       
       return `${CONFIG.ONELINK_BASE}?${params.toString()}`;
+    }
+
+    // ============================================
+    // 💰 가격 포맷팅
+    // ============================================
+    function formatPrice(price) {
+      return price.toLocaleString('ko-KR');
     }
 
     // ============================================
@@ -631,24 +841,24 @@
       if (isSpinning) return;
       isSpinning = true;
       spinBtn.disabled = true;
-      spinBtn.textContent = '돌아가는 중...';
+      spinBtn.textContent = '두근두근...💓';
 
       const prize = selectPrize();
       const prizeIndex = PRIZES.indexOf(prize);
       const sliceAngle = 360 / PRIZES.length;
       
       const targetAngle = 360 - (prizeIndex * sliceAngle + sliceAngle / 2) - 90;
-      const totalRotation = 360 * 6 + targetAngle;
+      const totalRotation = 360 * 7 + targetAngle;
       
       let start = null;
-      const duration = 5000;
+      const duration = 5500;
       const startAngleDeg = currentAngle * 180 / Math.PI;
 
       function animate(timestamp) {
         if (!start) start = timestamp;
         const progress = Math.min((timestamp - start) / duration, 1);
         
-        const easeOut = 1 - Math.pow(1 - progress, 3);
+        const easeOut = 1 - Math.pow(1 - progress, 4);
         currentAngle = (startAngleDeg + totalRotation * easeOut) * Math.PI / 180;
         
         ctx.clearRect(0, 0, displaySize, displaySize);
@@ -669,25 +879,22 @@
     // 🎊 결과 모달
     // ============================================
     function showModal(prize) {
-      // 콘페티 효과!
       createConfetti();
       
       document.getElementById('prizeImg').src = prize.image;
-      document.getElementById('prizeText').textContent = prize.text + ' 당첨!';
+      document.getElementById('prizeText').textContent = prize.text + ' 당첨! 🎊';
+      document.getElementById('prizeName').textContent = prize.text;
+      document.getElementById('prizePrice').textContent = formatPrice(prize.price);
       document.getElementById('modal').classList.add('show');
       
-      // 다운로드 버튼 클릭
       document.getElementById('downloadBtn').onclick = () => {
         if (isAndroid()) {
-          // 안드로이드: OneLink로 이동
           const oneLinkUrl = generateOneLinkUrl(prize);
           console.log('OneLink URL:', oneLinkUrl);
           window.location.href = oneLinkUrl;
         } else if (isIOS()) {
-          // iOS: 준비 중 안내
-          alert('iOS 버전은 준비 중입니다! 🙏\n조금만 기다려주세요.');
+          alert('iOS 버전은 준비 중이에요! 🙏\n조금만 기다려주세요~');
         } else {
-          // PC: 플레이스토어로 이동
           window.location.href = CONFIG.PLAYSTORE_URL;
         }
       };
