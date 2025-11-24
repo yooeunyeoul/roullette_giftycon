@@ -895,7 +895,6 @@
       document.getElementById('prizeImg').src = prize.image;
       document.getElementById('prizeText').textContent = prize.text + ' 당첨! 🎊';
       document.getElementById('prizeName').textContent = prize.text;
-      document.getElementById('prizePrice').textContent = formatPrice(prize.price);
       document.getElementById('modal').classList.add('show');
       
       document.getElementById('downloadBtn').onclick = () => {
