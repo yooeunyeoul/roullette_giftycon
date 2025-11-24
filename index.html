@@ -73,6 +73,8 @@
     }
     
     #wheel {
+      width: 320px;
+      height: 320px;
       border-radius: 50%;
       box-shadow: 
         0 0 0 8px #2d2d44,
@@ -176,12 +178,12 @@
     }
     
     .modal-prize img {
-      width: 100px;
-      height: 100px;
+      width: 120px;
+      height: 120px;
       object-fit: contain;
       border-radius: 10px;
       background: #fff;
-      padding: 8px;
+      padding: 10px;
     }
     
     .modal-prize-text {
@@ -229,7 +231,7 @@
     <section class="roulette-section">
       <div class="wheel-wrapper">
         <div class="pointer">🔻</div>
-        <canvas id="wheel" width="300" height="300"></canvas>
+        <canvas id="wheel"></canvas>
       </div>
       <button id="spinBtn" class="spin-btn">🎰 룰렛 돌리기</button>
     </section>
@@ -269,7 +271,7 @@
     };
 
     // ============================================
-    // 🎁 상품 데이터 (6개) - 이미지만!
+    // 🎁 상품 데이터 (6개)
     // ============================================
     const PRIZES = [
       { id: 'top',      text: 'TOP',        image: 'images/top.png',      color: '#8B4513', prob: 25 },
@@ -281,13 +283,23 @@
     ];
 
     // ============================================
-    // 🎨 캔버스 룰렛
+    // 🎨 고해상도 캔버스 설정 (레티나 대응)
     // ============================================
     const canvas = document.getElementById('wheel');
     const ctx = canvas.getContext('2d');
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const radius = canvas.width / 2 - 5;
+    
+    // 레티나 대응: 2배 해상도
+    const displaySize = 320;
+    const scale = 2;
+    canvas.width = displaySize * scale;
+    canvas.height = displaySize * scale;
+    canvas.style.width = displaySize + 'px';
+    canvas.style.height = displaySize + 'px';
+    ctx.scale(scale, scale);
+    
+    const centerX = displaySize / 2;
+    const centerY = displaySize / 2;
+    const radius = displaySize / 2 - 5;
 
     let currentAngle = 0;
     let imagesLoaded = 0;
@@ -326,24 +338,32 @@
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // 이미지만 그리기 (텍스트 없음!)
+        // 이미지 그리기 (크게!)
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startAngle + sliceAngle / 2);
         
-        const imgSize = 40;
-        const imgX = radius - 75;
+        const imgSize = 55; // 이미지 크기 키움!
+        const imgX = radius - 90;
         const imgY = -imgSize / 2;
         
         if (prizeImages[i] && prizeImages[i].complete && prizeImages[i].naturalWidth > 0) {
           // 이미지 배경 (흰색 원)
           ctx.beginPath();
-          ctx.arc(imgX + imgSize/2, 0, imgSize/2 + 3, 0, 2 * Math.PI);
+          ctx.arc(imgX + imgSize/2, 0, imgSize/2 + 4, 0, 2 * Math.PI);
           ctx.fillStyle = '#fff';
           ctx.fill();
+          ctx.strokeStyle = '#ddd';
+          ctx.lineWidth = 1;
+          ctx.stroke();
           
-          // 이미지
+          // 이미지 (원형 클리핑)
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(imgX + imgSize/2, 0, imgSize/2, 0, 2 * Math.PI);
+          ctx.clip();
           ctx.drawImage(prizeImages[i], imgX, imgY, imgSize, imgSize);
+          ctx.restore();
         }
         
         ctx.restore();
@@ -351,12 +371,18 @@
       
       // 중앙 원
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 25, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
       ctx.fillStyle = '#ffd93d';
       ctx.fill();
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 3;
       ctx.stroke();
+      
+      // 중앙 텍스트
+      ctx.fillStyle = '#1a1a2e';
+      ctx.font = 'bold 12px Noto Sans KR';
+      ctx.textAlign = 'center';
+      ctx.fillText('SPIN', centerX, centerY + 4);
     }
 
     setTimeout(drawWheel, 100);
@@ -395,16 +421,16 @@
       
       let start = null;
       const duration = 5000;
-      const startAngle = currentAngle;
+      const startAngleDeg = currentAngle * 180 / Math.PI;
 
       function animate(timestamp) {
         if (!start) start = timestamp;
         const progress = Math.min((timestamp - start) / duration, 1);
         
         const easeOut = 1 - Math.pow(1 - progress, 3);
-        currentAngle = (startAngle + totalRotation * easeOut) * Math.PI / 180;
+        currentAngle = (startAngleDeg + totalRotation * easeOut) * Math.PI / 180;
         
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, displaySize, displaySize);
         drawWheel();
         
         if (progress < 1) {
