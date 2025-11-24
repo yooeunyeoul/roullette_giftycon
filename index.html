@@ -4,103 +4,433 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>🎄 골드스텝 크리스마스 룰렛</title>
-  
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
-  
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      color: #fff;
+    }
+    
+    .container {
+      max-width: 420px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .header {
+      text-align: center;
+      padding: 20px 0;
+    }
+    
+    .title {
+      font-size: 26px;
+      font-weight: 900;
+      background: linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcf63);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: #ffd93d;
+      margin-top: 8px;
+    }
+    
+    .notice {
+      font-size: 12px;
+      color: #ff6b6b;
+      background: rgba(255,107,107,0.15);
+      padding: 5px 15px;
+      border-radius: 20px;
+      display: inline-block;
+      margin-top: 10px;
+    }
+    
+    .roulette-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 0;
+    }
+    
+    .wheel-wrapper {
+      position: relative;
+    }
+    
+    .pointer {
+      position: absolute;
+      top: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 35px;
+      z-index: 10;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+    }
+    
+    #wheel {
+      border-radius: 50%;
+      box-shadow: 
+        0 0 0 8px #2d2d44,
+        0 0 0 12px #ffd93d,
+        0 0 40px rgba(255,217,61,0.3);
+    }
+    
+    .spin-btn {
+      margin-top: 25px;
+      padding: 15px 50px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 5px 20px rgba(255,107,107,0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .spin-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 25px rgba(255,107,107,0.5);
+    }
+    
+    .spin-btn:disabled {
+      background: #555;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+    
+    .info-section {
+      background: rgba(255,255,255,0.05);
+      border-radius: 15px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    
+    .info-section h3 {
+      font-size: 14px;
+      color: #ffd93d;
+      margin-bottom: 12px;
+    }
+    
+    .info-section p {
+      font-size: 12px;
+      color: #888;
+      line-height: 1.8;
+    }
+    
+    .info-section strong {
+      color: #ff6b6b;
+    }
+    
+    /* 모달 */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.9);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      padding: 20px;
+    }
+    
+    .modal.show { display: flex; }
+    
+    .modal-box {
+      background: linear-gradient(180deg, #1a1a2e, #16213e);
+      border: 2px solid #ffd93d;
+      border-radius: 25px;
+      padding: 35px 25px;
+      text-align: center;
+      max-width: 320px;
+      width: 100%;
+      animation: popIn 0.4s ease;
+    }
+    
+    @keyframes popIn {
+      0% { transform: scale(0.7); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    
+    .modal-emoji { font-size: 50px; }
+    
+    .modal-title {
+      font-size: 24px;
+      color: #ff6b6b;
+      margin: 15px 0;
+    }
+    
+    .modal-prize {
+      background: rgba(255,255,255,0.1);
+      border-radius: 15px;
+      padding: 20px;
+      margin: 15px 0;
+    }
+    
+    .modal-prize img {
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+    }
+    
+    .modal-prize-text {
+      font-size: 22px;
+      font-weight: 900;
+      color: #ffd93d;
+      margin-top: 10px;
+    }
+    
+    .modal-desc {
+      font-size: 13px;
+      color: #aaa;
+      margin-bottom: 20px;
+    }
+    
+    .modal-btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(135deg, #6bcf63, #4CAF50);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 5px 15px rgba(107,207,99,0.4);
+    }
+    
+    .modal-timer {
+      margin-top: 15px;
+      font-size: 12px;
+      color: #ff6b6b;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <!-- 헤더 -->
     <header class="header">
-      <div class="snow">❄️</div>
-      <h1 class="title">
-        <span class="emoji">🎄</span>
-        크리스마스 룰렛
-        <span class="emoji">🎅</span>
-      </h1>
+      <h1 class="title">🎄 크리스마스 룰렛 🎅</h1>
       <p class="subtitle">100% 당첨! 지금 바로 돌려보세요</p>
       <p class="notice">※ 신규 회원 전용 이벤트</p>
     </header>
-
-    <!-- 룰렛 섹션 -->
+    
     <section class="roulette-section">
-      <div class="roulette-wrapper">
-        <div class="roulette-pointer">▼</div>
-        <canvas id="wheel" width="320" height="320"></canvas>
-        <button id="spin-btn" class="spin-btn">
-          <span>CLICK</span>
-        </button>
+      <div class="wheel-wrapper">
+        <div class="pointer">🔻</div>
+        <canvas id="wheel" width="300" height="300"></canvas>
       </div>
+      <button id="spinBtn" class="spin-btn">🎰 룰렛 돌리기</button>
     </section>
-
-    <!-- 상품 목록 -->
-    <section class="prizes-section">
-      <h2>🎁 이벤트 상품</h2>
-      <div class="prizes-grid">
-        <div class="prize-item">
-          <img src="images/starbucks.png" alt="스타벅스" onerror="this.src='https://via.placeholder.com/60x60?text=☕'">
-          <span>스타벅스</span>
-        </div>
-        <div class="prize-item">
-          <img src="images/cu.png" alt="CU상품권" onerror="this.src='https://via.placeholder.com/60x60?text=CU'">
-          <span>CU 상품권</span>
-        </div>
-        <div class="prize-item">
-          <img src="images/ramen.png" alt="진라면" onerror="this.src='https://via.placeholder.com/60x60?text=🍜'">
-          <span>진라면</span>
-        </div>
-        <div class="prize-item">
-          <img src="images/coffee.png" alt="편의점커피" onerror="this.src='https://via.placeholder.com/60x60?text=☕'">
-          <span>편의점 커피</span>
-        </div>
-        <div class="prize-item point-item">
-          <div class="point-icon">P</div>
-          <span>포인트</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 유의사항 -->
-    <section class="notice-section">
+    
+    <section class="info-section">
       <h3>📌 유의사항</h3>
-      <ul>
-        <li>본 이벤트는 <strong>신규 회원 전용</strong>입니다.</li>
-        <li>룰렛 참여 후, 골드스텝 앱 설치 및 가입 시 상품이 지급됩니다.</li>
-        <li>당첨 상품은 앱 내 포인트로 지급되며, 기프티콘으로 교환 가능합니다.</li>
-        <li>이벤트 기간: 2024.12.1 ~ 2024.12.25</li>
-        <li>부정 참여 시 당첨이 취소될 수 있습니다.</li>
-      </ul>
+      <p>
+        • 본 이벤트는 <strong>신규 회원 전용</strong>입니다.<br>
+        • 룰렛 참여 후 앱 설치 및 가입 시 상품 지급<br>
+        • 이벤트 기간: 2025.12.22 ~ 12.28
+      </p>
     </section>
-
-    <!-- 푸터 -->
-    <footer class="footer">
-      <p>© 2024 골드스텝. All rights reserved.</p>
-    </footer>
   </div>
-
+  
   <!-- 결과 모달 -->
-  <div id="result-modal" class="modal hidden">
-    <div class="modal-content">
-      <div class="modal-fireworks">🎉</div>
-      <h2>축하해요!</h2>
-      <div class="prize-result">
-        <img id="result-image" src="" alt="당첨 상품">
-        <p id="result-text"></p>
+  <div id="modal" class="modal">
+    <div class="modal-box">
+      <div class="modal-emoji">🎉</div>
+      <h2 class="modal-title">축하합니다!</h2>
+      <div class="modal-prize">
+        <img id="prizeImg" src="" alt="">
+        <p id="prizeText" class="modal-prize-text"></p>
       </div>
       <p class="modal-desc">앱 설치하고 바로 받아가세요!</p>
-      <a id="download-btn" href="#" class="download-btn">
-        🎁 지금 받으러 가기
-      </a>
-      <p class="modal-timer">⏰ <span id="timer">24:00:00</span> 내 설치 시 유효</p>
+      <button id="downloadBtn" class="modal-btn">🎁 지금 받으러 가기</button>
+      <p class="modal-timer">⏰ 24시간 내 설치 시 유효</p>
     </div>
   </div>
 
-  <!-- Winwheel.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/winwheel@1.0.0/dist/Winwheel.min.js"></script>
-  <script src="script.js"></script>
+  <script>
+    // ============================================
+    // 🔧 설정
+    // ============================================
+    const CONFIG = {
+      ONELINK_BASE: 'https://goldstep.onelink.me/abcd',
+      PLAYSTORE_URL: 'https://play.google.com/store/apps/details?id=com.goldstep'
+    };
+
+    // ============================================
+    // 🎁 상품 데이터 (6개) - 이미지만!
+    // ============================================
+    const PRIZES = [
+      { id: 'top',      text: 'TOP',        image: 'images/top.png',      color: '#8B4513', prob: 25 },
+      { id: 'ramen',    text: '진라면',      image: 'images/ramen.png',    color: '#e74c3c', prob: 25 },
+      { id: 'hotbreak', text: '핫브레이크',  image: 'images/hotbreak.png', color: '#9b59b6', prob: 20 },
+      { id: 'icecream', text: '아이스크림',  image: 'images/icecream.png', color: '#3498db', prob: 15 },
+      { id: 'wang',     text: '왕뚜껑',      image: 'images/wang.png',     color: '#e67e22', prob: 10 },
+      { id: 'choco',    text: '초코송이',    image: 'images/choco.png',    color: '#27ae60', prob: 5 }
+    ];
+
+    // ============================================
+    // 🎨 캔버스 룰렛
+    // ============================================
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = canvas.width / 2 - 5;
+
+    let currentAngle = 0;
+    let imagesLoaded = 0;
+    const prizeImages = [];
+
+    // 이미지 미리 로드
+    PRIZES.forEach((prize, i) => {
+      const img = new Image();
+      img.onload = () => {
+        imagesLoaded++;
+        if (imagesLoaded === PRIZES.length) drawWheel();
+      };
+      img.onerror = () => {
+        imagesLoaded++;
+        if (imagesLoaded === PRIZES.length) drawWheel();
+      };
+      img.src = prize.image;
+      prizeImages[i] = img;
+    });
+
+    function drawWheel() {
+      const sliceAngle = (2 * Math.PI) / PRIZES.length;
+      
+      PRIZES.forEach((prize, i) => {
+        const startAngle = currentAngle + i * sliceAngle;
+        const endAngle = startAngle + sliceAngle;
+        
+        // 조각 그리기
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = prize.color;
+        ctx.fill();
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // 이미지만 그리기 (텍스트 없음!)
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(startAngle + sliceAngle / 2);
+        
+        const imgSize = 40;
+        const imgX = radius - 75;
+        const imgY = -imgSize / 2;
+        
+        if (prizeImages[i] && prizeImages[i].complete && prizeImages[i].naturalWidth > 0) {
+          // 이미지 배경 (흰색 원)
+          ctx.beginPath();
+          ctx.arc(imgX + imgSize/2, 0, imgSize/2 + 3, 0, 2 * Math.PI);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          
+          // 이미지
+          ctx.drawImage(prizeImages[i], imgX, imgY, imgSize, imgSize);
+        }
+        
+        ctx.restore();
+      });
+      
+      // 중앙 원
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 25, 0, 2 * Math.PI);
+      ctx.fillStyle = '#ffd93d';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    setTimeout(drawWheel, 100);
+
+    // ============================================
+    // 🎲 확률 기반 선택
+    // ============================================
+    function selectPrize() {
+      const total = PRIZES.reduce((sum, p) => sum + p.prob, 0);
+      let rand = Math.random() * total;
+      for (const prize of PRIZES) {
+        rand -= prize.prob;
+        if (rand <= 0) return prize;
+      }
+      return PRIZES[0];
+    }
+
+    // ============================================
+    // 🎡 룰렛 회전
+    // ============================================
+    let isSpinning = false;
+    const spinBtn = document.getElementById('spinBtn');
+
+    spinBtn.addEventListener('click', () => {
+      if (isSpinning) return;
+      isSpinning = true;
+      spinBtn.disabled = true;
+      spinBtn.textContent = '돌아가는 중...';
+
+      const prize = selectPrize();
+      const prizeIndex = PRIZES.indexOf(prize);
+      const sliceAngle = 360 / PRIZES.length;
+      
+      const targetAngle = 360 - (prizeIndex * sliceAngle + sliceAngle / 2) - 90;
+      const totalRotation = 360 * 6 + targetAngle;
+      
+      let start = null;
+      const duration = 5000;
+      const startAngle = currentAngle;
+
+      function animate(timestamp) {
+        if (!start) start = timestamp;
+        const progress = Math.min((timestamp - start) / duration, 1);
+        
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        currentAngle = (startAngle + totalRotation * easeOut) * Math.PI / 180;
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawWheel();
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          isSpinning = false;
+          showModal(prize);
+        }
+      }
+      
+      requestAnimationFrame(animate);
+    });
+
+    // ============================================
+    // 🎊 결과 모달
+    // ============================================
+    function showModal(prize) {
+      document.getElementById('prizeImg').src = prize.image;
+      document.getElementById('prizeText').textContent = prize.text + ' 당첨!';
+      document.getElementById('modal').classList.add('show');
+      
+      document.getElementById('downloadBtn').onclick = () => {
+        const url = `${CONFIG.ONELINK_BASE}?product_id=${prize.id}&product_name=${encodeURIComponent(prize.text)}`;
+        window.location.href = url;
+      };
+    }
+  </script>
 </body>
 </html>
