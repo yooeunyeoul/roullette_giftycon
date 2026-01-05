@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>골드스텝 송금 도우미</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+            margin: 0;
+        }
+        h2 { margin-top: 0; color: #333; }
+        
+        /* 입력 영역 */
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 12px;
+            box-sizing: border-box; /* 패딩 포함 */
+            margin-bottom: 10px;
+        }
+
+        button#convertBtn {
+            width: 100%;
+            padding: 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        /* 리스트 영역 */
+        #listContainer {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 1px solid #eee;
+        }
+
+        .card:active {
+            background-color: #e0e0e0;
+            transform: scale(0.98);
+        }
+
+        /* 완료(송금함) 상태 스타일 */
+        .card.done {
+            background-color: #d1e7dd; /* 초록색 배경 */
+            opacity: 0.6;
+            text-decoration: line-through;
+            border-color: #badbcc;
+        }
+        .card.done::after {
+            content: '완료';
+            color: green;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .amount {
+            font-size: 18px;
+            font-weight: bold;
+            color: #d63384;
+        }
+        
+        .bank-info {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .name {
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* 알림 토스트 */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 2px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            font-size: 17px;
+            border-radius: 20px;
+        }
+
+        #toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+
+        @-webkit-keyframes fadein {
+            from {bottom: 0; opacity: 0;} 
+            to {bottom: 30px; opacity: 1;}
+        }
+
+        @keyframes fadein {
+            from {bottom: 0; opacity: 0;}
+            to {bottom: 30px; opacity: 1;}
+        }
+
+        @keyframes fadeout {
+            from {bottom: 30px; opacity: 1;} 
+            to {bottom: 0; opacity: 0;}
+        }
+    </style>
+</head>
+<body>
+
+    <h2>💸 송금 리스트 변환기</h2>
+    <textarea id="rawData" placeholder="여기에 DB 데이터를 붙여넣으세요..."></textarea>
+    <button id="convertBtn" onclick="parseData()">변환하기</button>
+
+    <div id="listContainer"></div>
+
+    <div id="toast">계좌번호 복사 완료!</div>
+
+    <script>
+        function parseData() {
+            const raw = document.getElementById('rawData').value.trim();
+            if (!raw) return;
+
+            const rows = raw.split('\n');
+            const container = document.getElementById('listContainer');
+            container.innerHTML = ''; // 초기화
+
+            rows.forEach(row => {
+                // 탭(\t)으로 데이터 분리 (공백이 여러개일 경우도 대비)
+                // DB데이터가 탭으로 구분되어 있다고 가정합니다.
+                const cols = row.split(/\t/); 
+
+                // 데이터가 빈 줄이면 패스
+                if (cols.length < 5) return;
+
+                // 인덱스 매핑 (제공해주신 데이터 기준)
+                // 0: UUID, 1: UUID, 2: 금액, 3: 포인트?, 4: 은행명, 5: 계좌번호, 6: 예금주
+                const amount = cols[2];
+                const bankName = cols[4];
+                const accountNum = cols[5];
+                const holderName = cols[6];
+
+                // 카드 생성
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.onclick = function() {
+                    copyToClipboard(accountNum, card);
+                };
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'info';
+
+                // 금액 표시 (콤마 추가)
+                const fmtAmount = Number(amount).toLocaleString() + '원';
+
+                infoDiv.innerHTML = `
+                    <span class="amount">${fmtAmount}</span>
+                    <span class="bank-info">${bankName} ${accountNum}</span>
+                    <span class="name">예금주: ${holderName}</span>
+                `;
+
+                card.appendChild(infoDiv);
+                container.appendChild(card);
+            });
+
+            // 입력창 숨기기 (깔끔하게 보려고)
+            document.getElementById('rawData').style.display = 'none';
+            document.getElementById('convertBtn').innerText = '다시 입력하기';
+            document.getElementById('convertBtn').onclick = function() {
+                location.reload();
+            };
+        }
+
+        function copyToClipboard(text, element) {
+            // 클립보드 복사
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+
+            // 스타일 변경 (완료 표시)
+            element.classList.add('done');
+
+            // 토스트 메시지 표시
+            showToast(`${text} 복사됨`);
+        }
+
+        function showToast(msg) {
+            const x = document.getElementById("toast");
+            x.innerText = msg;
+            x.className = "show";
+            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
+        }
+    </script>
+</body>
+</html>
