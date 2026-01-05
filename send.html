@@ -3,28 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>골드스텝 송금(전체복사)</title>
+    <title>골드스텝 송금(실패관리)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background-color: #f5f5f5; margin: 0; }
         h2 { margin-top: 0; color: #333; text-align: center;}
         
+        /* 입력창 스타일 */
         .input-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
         textarea { width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; box-sizing: border-box; margin-bottom: 10px; }
         
         button.action-btn { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         button.reset-btn { background-color: #6c757d; margin-top: 10px; }
 
+        /* QR 코드 */
         #qrContainer { display: none; text-align: center; margin-top: 20px; background: white; padding: 20px; border-radius: 12px; }
         #qrcode { display: inline-block; }
         .qr-desc { margin-top: 10px; font-size: 14px; color: #666; font-weight: bold; }
 
-        #listContainer { display: flex; flex-direction: column; gap: 10px; }
-        .card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .card:active { background-color: #f0f0f0; transform: scale(0.98); }
-        .card.done { background-color: #d1e7dd; opacity: 0.6; text-decoration: line-through; border-color: #badbcc; }
+        /* 리스트 영역 */
+        #listContainer, #failContainer { display: flex; flex-direction: column; gap: 10px; }
+        h3 { margin: 20px 0 10px 0; font-size: 16px; color: #555; border-bottom: 2px solid #ddd; padding-bottom: 5px; }
         
+        /* 카드 디자인 */
+        .card { 
+            background: white; 
+            border-radius: 10px; 
+            border: 1px solid #eee; 
+            display: flex; 
+            overflow: hidden; /* 버튼 삐져나옴 방지 */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        /* 카드 내용 (왼쪽) */
+        .card-content {
+            padding: 15px;
+            flex-grow: 1;
+            cursor: pointer;
+        }
+        .card-content:active { background-color: #f8f9fa; }
+
+        /* 버튼 영역 (오른쪽) */
+        .card-actions {
+            display: flex;
+            flex-direction: column;
+            width: 60px;
+        }
+        .btn-ok {
+            flex: 1;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: none;
+            border-left: 1px solid #eee;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .btn-fail {
+            flex: 1;
+            background-color: #ffebee;
+            color: #c62828;
+            border: none;
+            border-top: 1px solid #eee;
+            border-left: 1px solid #eee;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        /* 상태별 스타일 */
+        .card.done { background-color: #d1e7dd; opacity: 0.6; }
+        .card.done .card-content { text-decoration: line-through; }
+        .card.done .card-actions { display: none; } /* 완료되면 버튼 숨김 */
+
+        .card.fail { background-color: #ffcdd2; opacity: 1; border-color: #e57373; }
+        .card.fail .amount { color: #b71c1c; }
+        .card.fail .btn-fail { display: none; } /* 실패 목록에선 실패 버튼 숨김 */
+        .card.fail .btn-ok { height: 100%; border-top: none; background-color: white; color: #333; font-size: 14px; } /* 복구 버튼으로 변경 */
+
         .info { display: flex; flex-direction: column; gap: 4px; }
         .amount { font-size: 18px; font-weight: bold; color: #d63384; }
         .bank-info { font-size: 16px; color: #333; font-weight: 500; }
@@ -34,11 +89,14 @@
         #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+        
+        /* 숨김 클래스 */
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <h2>💸 골드스텝 송금</h2>
+    <h2>💸 골드스텝 정산</h2>
 
     <div id="inputSection" class="input-section">
         <textarea id="rawData" placeholder="DB 데이터를 붙여넣으세요..."></textarea>
@@ -49,10 +107,25 @@
         </div>
     </div>
 
-    <div id="listContainer"></div>
-    <div id="resetSection" style="display:none; text-align: center; margin-top: 20px;">
+    <div id="pendingSection" class="hidden">
+        <h3>📤 송금 대기 목록 <span id="pendingCount"></span></h3>
+        <div id="listContainer"></div>
+    </div>
+
+    <div id="failSection" class="hidden">
+        <h3 style="color:#c62828;">❌ 송금 실패/보류 <span id="failCount"></span></h3>
+        <div id="failContainer"></div>
+    </div>
+
+    <div id="doneSection" class="hidden">
+        <h3 style="color:#2e7d32;">✅ 송금 완료</h3>
+        <div id="doneContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+    </div>
+
+    <div id="resetSection" style="display:none; text-align: center; margin-top: 40px; margin-bottom: 20px;">
         <button class="action-btn reset-btn" onclick="resetAll()">새로 입력하기</button>
     </div>
+
     <div id="toast">복사 완료!</div>
 
     <script>
@@ -73,7 +146,6 @@
 
             const rows = raw.split('\n');
             let optimizedData = [];
-
             rows.forEach(row => {
                 const cols = row.split(/\t/);
                 if (cols.length < 7) return; 
@@ -85,24 +157,17 @@
             const currentUrl = window.location.href.split('?')[0];
             const targetUrl = `${currentUrl}?d=${compressed}`;
 
-            if (targetUrl.length > 4000) {
-                alert("데이터가 너무 많습니다. 50줄 이하로 나눠주세요.");
-                return;
-            }
+            if (targetUrl.length > 4000) { alert("데이터가 너무 많습니다. 50줄 이하로 나눠주세요."); return; }
 
-            const qrContainer = document.getElementById('qrContainer');
-            const qrcodeDiv = document.getElementById('qrcode');
-            qrContainer.style.display = 'block';
-            qrcodeDiv.innerHTML = ''; 
-
-            new QRCode(qrcodeDiv, {
-                text: targetUrl, width: 250, height: 250, correctLevel : QRCode.CorrectLevel.L
-            });
+            document.getElementById('qrContainer').style.display = 'block';
+            document.getElementById('qrcode').innerHTML = ''; 
+            new QRCode(document.getElementById('qrcode'), { text: targetUrl, width: 250, height: 250, correctLevel : QRCode.CorrectLevel.L });
         }
 
         function renderList(rawData) {
             document.getElementById('inputSection').style.display = 'none';
             document.getElementById('resetSection').style.display = 'block';
+            document.getElementById('pendingSection').classList.remove('hidden');
 
             const rows = rawData.split('||');
             const container = document.getElementById('listContainer');
@@ -111,41 +176,114 @@
             rows.forEach(row => {
                 const cols = row.split(';;');
                 if (cols.length < 4) return;
-
-                const amount = cols[0];
-                const bankName = cols[1];
-                const accountNum = cols[2];
-                const holderName = cols[3];
-                const fmtAmount = Number(amount).toLocaleString() + '원';
-
-                // ★ 수정된 부분: 전체 텍스트 만들기
-                const copyText = `${fmtAmount} ${bankName} ${accountNum} ${holderName}`;
-
-                const card = document.createElement('div');
-                card.className = 'card';
-                
-                // 클릭하면 전체 텍스트 복사
-                card.onclick = function() { copyToClipboard(copyText, card); };
-
-                card.innerHTML = `
-                    <div class="info">
-                        <span class="amount">${fmtAmount}</span>
-                        <span class="bank-info">${bankName} ${accountNum}</span>
-                        <span class="name">${holderName}</span>
-                    </div>
-                `;
-                container.appendChild(card);
+                createCard(cols[0], cols[1], cols[2], cols[3], container);
             });
+            updateCounts();
         }
 
-        function copyToClipboard(text, element) {
+        function createCard(amount, bankName, accountNum, holderName, parentElement) {
+            const fmtAmount = Number(amount).toLocaleString() + '원';
+            const copyText = `${fmtAmount} ${bankName} ${accountNum} ${holderName}`;
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            // 카드 내용 (왼쪽) - 클릭 시 복사
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'card-content';
+            contentDiv.onclick = function() { copyToClipboard(copyText); };
+            contentDiv.innerHTML = `
+                <div class="info">
+                    <span class="amount">${fmtAmount}</span>
+                    <span class="bank-info">${bankName} ${accountNum}</span>
+                    <span class="name">${holderName}</span>
+                </div>
+            `;
+
+            // 버튼 영역 (오른쪽)
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'card-actions';
+
+            // 성공 버튼 (V)
+            const btnOk = document.createElement('button');
+            btnOk.className = 'btn-ok';
+            btnOk.innerHTML = '✔';
+            btnOk.onclick = function() { moveToDone(card); };
+
+            // 실패 버튼 (X)
+            const btnFail = document.createElement('button');
+            btnFail.className = 'btn-fail';
+            btnFail.innerHTML = '✖';
+            btnFail.onclick = function() { moveToFail(card, amount, bankName, accountNum, holderName); };
+
+            actionsDiv.appendChild(btnOk);
+            actionsDiv.appendChild(btnFail);
+
+            card.appendChild(contentDiv);
+            card.appendChild(actionsDiv);
+            parentElement.appendChild(card);
+        }
+
+        // 성공 처리 (완료 목록으로 이동)
+        function moveToDone(card) {
+            card.classList.add('done');
+            document.getElementById('doneSection').classList.remove('hidden');
+            document.getElementById('doneContainer').prepend(card); // 맨 위로
+            updateCounts();
+        }
+
+        // 실패 처리 (실패 목록으로 이동)
+        function moveToFail(card, amount, bankName, accountNum, holderName) {
+            // 기존 카드는 제거하고 실패 카드로 재생성
+            card.remove();
+            
+            document.getElementById('failSection').classList.remove('hidden');
+            const failContainer = document.getElementById('failContainer');
+            
+            const failCard = document.createElement('div');
+            failCard.className = 'card fail';
+            
+            const fmtAmount = Number(amount).toLocaleString() + '원';
+            const copyText = `${fmtAmount} ${bankName} ${accountNum} ${holderName}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'card-content';
+            contentDiv.onclick = function() { copyToClipboard(copyText); }; // 실패한 것도 다시 복사는 가능하게
+            contentDiv.innerHTML = `
+                <div class="info">
+                    <span class="amount">${fmtAmount}</span>
+                    <span class="bank-info">${bankName} ${accountNum}</span>
+                    <span class="name">${holderName} (확인 필요)</span>
+                </div>
+            `;
+
+            // 복구 버튼 (다시 대기 목록으로)
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'card-actions';
+            const btnRestore = document.createElement('button');
+            btnRestore.className = 'btn-ok';
+            btnRestore.innerText = '복구';
+            btnRestore.onclick = function() { 
+                failCard.remove();
+                createCard(amount, bankName, accountNum, holderName, document.getElementById('listContainer'));
+                updateCounts();
+            };
+            actionsDiv.appendChild(btnRestore);
+
+            failCard.appendChild(contentDiv);
+            failCard.appendChild(actionsDiv);
+            failContainer.appendChild(failCard);
+            
+            updateCounts();
+        }
+
+        function copyToClipboard(text) {
             const textarea = document.createElement('textarea');
             textarea.value = text;
             document.body.appendChild(textarea);
             textarea.select();
             document.execCommand('copy');
             document.body.removeChild(textarea);
-            element.classList.add('done');
             showToast("복사 완료!");
         }
 
@@ -153,7 +291,19 @@
             const x = document.getElementById("toast");
             x.innerText = msg;
             x.className = "show";
-            setTimeout(() => { x.className = x.className.replace("show", ""); }, 2000);
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 1000);
+        }
+
+        function updateCounts() {
+            const pending = document.getElementById('listContainer').children.length;
+            const failed = document.getElementById('failContainer').children.length;
+            
+            document.getElementById('pendingCount').innerText = `(${pending}건)`;
+            document.getElementById('failCount').innerText = `(${failed}건)`;
+
+            if(pending === 0 && failed === 0) {
+               // 다 처리됨
+            }
         }
 
         function resetAll() { window.location.href = window.location.href.split('?')[0]; }
