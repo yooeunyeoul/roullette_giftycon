@@ -3,135 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>골드스텝 송금 도우미</title>
+    <title>골드스텝 송금(최적화)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            padding: 20px;
-            background-color: #f5f5f5;
-            margin: 0;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background-color: #f5f5f5; margin: 0; }
         h2 { margin-top: 0; color: #333; text-align: center;}
         
-        /* PC 입력 영역 */
-        .input-section {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-
-        textarea {
-            width: 100%;
-            height: 120px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 12px;
-            box-sizing: border-box;
-            margin-bottom: 10px;
-        }
-
-        button.action-btn {
-            width: 100%;
-            padding: 15px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-        }
+        .input-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        textarea { width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 12px; box-sizing: border-box; margin-bottom: 10px; }
         
-        button.reset-btn {
-            background-color: #6c757d;
-            margin-top: 10px;
-        }
+        button.action-btn { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        button.reset-btn { background-color: #6c757d; margin-top: 10px; }
 
-        /* QR 코드 영역 */
-        #qrContainer {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-        }
-        #qrcode {
-            display: inline-block;
-        }
-        .qr-desc {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #666;
-            font-weight: bold;
-        }
+        #qrContainer { display: none; text-align: center; margin-top: 20px; background: white; padding: 20px; border-radius: 12px; }
+        #qrcode { display: inline-block; }
+        .qr-desc { margin-top: 10px; font-size: 14px; color: #666; font-weight: bold; }
 
-        /* 리스트 영역 */
-        #listContainer {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .card {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.2s;
-            border: 1px solid #eee;
-        }
-
-        .card:active {
-            background-color: #e0e0e0;
-            transform: scale(0.98);
-        }
-
-        .card.done {
-            background-color: #d1e7dd;
-            opacity: 0.6;
-            text-decoration: line-through;
-            border-color: #badbcc;
-        }
-        .card.done::after {
-            content: '완료';
-            color: green;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
+        #listContainer { display: flex; flex-direction: column; gap: 10px; }
+        .card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .card:active { background-color: #f0f0f0; transform: scale(0.98); }
+        .card.done { background-color: #d1e7dd; opacity: 0.6; text-decoration: line-through; border-color: #badbcc; }
+        
         .info { display: flex; flex-direction: column; gap: 4px; }
         .amount { font-size: 18px; font-weight: bold; color: #d63384; }
         .bank-info { font-size: 16px; color: #333; font-weight: 500; }
         .name { font-size: 14px; color: #666; }
 
-        /* 알림 토스트 */
-        #toast {
-            visibility: hidden;
-            min-width: 250px;
-            background-color: #333;
-            color: #fff;
-            text-align: center;
-            border-radius: 20px;
-            padding: 12px;
-            position: fixed;
-            z-index: 99;
-            left: 50%;
-            bottom: 30px;
-            transform: translateX(-50%);
-            font-size: 15px;
-        }
+        #toast { visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center; border-radius: 20px; padding: 12px; position: fixed; z-index: 99; left: 50%; bottom: 30px; transform: translateX(-50%); }
         #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
-
         @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
         @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
@@ -143,104 +43,99 @@
     <div id="inputSection" class="input-section">
         <textarea id="rawData" placeholder="DB 데이터를 붙여넣으세요..."></textarea>
         <button class="action-btn" onclick="generateQR()">PC에서 QR코드 생성하기</button>
-        
         <div id="qrContainer">
             <div id="qrcode"></div>
-            <p class="qr-desc">휴대폰 기본 카메라로 스캔하세요!<br>(데이터가 자동 입력됩니다)</p>
+            <p class="qr-desc">휴대폰 카메라로 스캔하세요!</p>
         </div>
     </div>
 
     <div id="listContainer"></div>
-    
     <div id="resetSection" style="display:none; text-align: center; margin-top: 20px;">
         <button class="action-btn reset-btn" onclick="resetAll()">새로 입력하기</button>
     </div>
-
     <div id="toast">복사 완료!</div>
 
     <script>
-        // 페이지 로드 시 URL에 데이터가 있는지 확인 (휴대폰 접속 시)
+        // 페이지 로드 시 데이터 확인
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const compressedData = urlParams.get('d');
-
             if (compressedData) {
-                // URL에 데이터가 있으면 압축 해제 후 리스트 렌더링
                 try {
                     const decompressed = LZString.decompressFromEncodedURIComponent(compressedData);
-                    if (decompressed) {
-                        renderList(decompressed);
-                    }
-                } catch (e) {
-                    alert("데이터 로드 실패");
-                }
+                    if (decompressed) renderList(decompressed);
+                } catch (e) { alert("데이터 로드 실패"); }
             }
         };
 
-        // 1. PC: QR코드 생성 함수
+        // 1. PC: QR코드 생성 (최적화 적용: 필요한 데이터만 뽑아서 압축)
         function generateQR() {
             const raw = document.getElementById('rawData').value.trim();
-            if (!raw) {
-                alert("데이터를 입력해주세요.");
-                return;
-            }
+            if (!raw) { alert("데이터를 입력해주세요."); return; }
 
-            // 데이터를 압축해서 URL 파라미터로 만듦
-            const compressed = LZString.compressToEncodedURIComponent(raw);
-            const currentUrl = window.location.href.split('?')[0]; // 기존 파라미터 제거
+            const rows = raw.split('\n');
+            let optimizedData = [];
+
+            // ★ 핵심: 쓸데없는 데이터 다 버리고 필요한 것만 추림
+            rows.forEach(row => {
+                const cols = row.split(/\t/);
+                if (cols.length < 7) return; 
+                // 순서: 금액(2), 은행(4), 계좌(5), 예금주(6)
+                // 구분자 ';;' 사용
+                optimizedData.push(`${cols[2]};;${cols[4]};;${cols[5]};;${cols[6]}`);
+            });
+
+            // 줄바꿈은 '||'로 구분
+            const finalString = optimizedData.join('||');
+
+            // 압축
+            const compressed = LZString.compressToEncodedURIComponent(finalString);
+            const currentUrl = window.location.href.split('?')[0];
             const targetUrl = `${currentUrl}?d=${compressed}`;
 
-            // URL 길이 체크 (QR코드가 너무 복잡해지면 스캔 안됨)
-            if (targetUrl.length > 2000) {
-                alert("데이터가 너무 많습니다. 10~15줄씩 나눠서 진행해주세요.");
+            if (targetUrl.length > 4000) { // 한도를 4000자로 늘림 (이제 데이터가 작아서 충분함)
+                alert("데이터가 너무 많습니다. 50줄 이하로 나눠주세요.");
                 return;
             }
 
-            // QR코드 생성
             const qrContainer = document.getElementById('qrContainer');
             const qrcodeDiv = document.getElementById('qrcode');
-            
             qrContainer.style.display = 'block';
-            qrcodeDiv.innerHTML = ''; // 초기화
+            qrcodeDiv.innerHTML = ''; 
 
             new QRCode(qrcodeDiv, {
                 text: targetUrl,
-                width: 200,
-                height: 200,
-                colorDark : "#000000",
-                colorLight : "#ffffff",
+                width: 250, // QR 크기 좀 키움
+                height: 250,
                 correctLevel : QRCode.CorrectLevel.L
             });
         }
 
-        // 2. 리스트 렌더링 함수
+        // 2. 모바일: 리스트 렌더링
         function renderList(rawData) {
-            // 입력창 숨기고 리스트 표시
             document.getElementById('inputSection').style.display = 'none';
             document.getElementById('resetSection').style.display = 'block';
 
-            const rows = rawData.split('\n');
+            // '||'로 줄바꿈 분리
+            const rows = rawData.split('||');
             const container = document.getElementById('listContainer');
             container.innerHTML = '';
 
-            let count = 0;
             rows.forEach(row => {
-                const cols = row.split(/\t/); 
-                if (cols.length < 5) return;
+                // ';;'로 데이터 분리
+                const cols = row.split(';;');
+                if (cols.length < 4) return;
 
-                const amount = cols[2];
-                const bankName = cols[4];
-                const accountNum = cols[5];
-                const holderName = cols[6];
+                const amount = cols[0];
+                const bankName = cols[1];
+                const accountNum = cols[2];
+                const holderName = cols[3];
 
                 const card = document.createElement('div');
                 card.className = 'card';
-                card.onclick = function() {
-                    copyToClipboard(accountNum, card);
-                };
+                card.onclick = function() { copyToClipboard(accountNum, card); };
 
                 const fmtAmount = Number(amount).toLocaleString() + '원';
-
                 card.innerHTML = `
                     <div class="info">
                         <span class="amount">${fmtAmount}</span>
@@ -249,10 +144,7 @@
                     </div>
                 `;
                 container.appendChild(card);
-                count++;
             });
-
-            if(count === 0) alert("데이터 형식이 올바르지 않습니다.");
         }
 
         // 3. 복사 기능
@@ -263,7 +155,6 @@
             textarea.select();
             document.execCommand('copy');
             document.body.removeChild(textarea);
-
             element.classList.add('done');
             showToast(`${text} 복사됨`);
         }
@@ -272,12 +163,10 @@
             const x = document.getElementById("toast");
             x.innerText = msg;
             x.className = "show";
-            setTimeout(function(){ x.className = x.className.replace("show", ""); }, 2000);
+            setTimeout(() => { x.className = x.className.replace("show", ""); }, 2000);
         }
 
-        function resetAll() {
-            window.location.href = window.location.href.split('?')[0];
-        }
+        function resetAll() { window.location.href = window.location.href.split('?')[0]; }
     </script>
 </body>
 </html>
