@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>골드스텝 송금(최적화)</title>
+    <title>골드스텝 송금(전체복사)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
     <style>
@@ -56,7 +56,6 @@
     <div id="toast">복사 완료!</div>
 
     <script>
-        // 페이지 로드 시 데이터 확인
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
             const compressedData = urlParams.get('d');
@@ -68,7 +67,6 @@
             }
         };
 
-        // 1. PC: QR코드 생성 (최적화 적용: 필요한 데이터만 뽑아서 압축)
         function generateQR() {
             const raw = document.getElementById('rawData').value.trim();
             if (!raw) { alert("데이터를 입력해주세요."); return; }
@@ -76,24 +74,18 @@
             const rows = raw.split('\n');
             let optimizedData = [];
 
-            // ★ 핵심: 쓸데없는 데이터 다 버리고 필요한 것만 추림
             rows.forEach(row => {
                 const cols = row.split(/\t/);
                 if (cols.length < 7) return; 
-                // 순서: 금액(2), 은행(4), 계좌(5), 예금주(6)
-                // 구분자 ';;' 사용
                 optimizedData.push(`${cols[2]};;${cols[4]};;${cols[5]};;${cols[6]}`);
             });
 
-            // 줄바꿈은 '||'로 구분
             const finalString = optimizedData.join('||');
-
-            // 압축
             const compressed = LZString.compressToEncodedURIComponent(finalString);
             const currentUrl = window.location.href.split('?')[0];
             const targetUrl = `${currentUrl}?d=${compressed}`;
 
-            if (targetUrl.length > 4000) { // 한도를 4000자로 늘림 (이제 데이터가 작아서 충분함)
+            if (targetUrl.length > 4000) {
                 alert("데이터가 너무 많습니다. 50줄 이하로 나눠주세요.");
                 return;
             }
@@ -104,25 +96,19 @@
             qrcodeDiv.innerHTML = ''; 
 
             new QRCode(qrcodeDiv, {
-                text: targetUrl,
-                width: 250, // QR 크기 좀 키움
-                height: 250,
-                correctLevel : QRCode.CorrectLevel.L
+                text: targetUrl, width: 250, height: 250, correctLevel : QRCode.CorrectLevel.L
             });
         }
 
-        // 2. 모바일: 리스트 렌더링
         function renderList(rawData) {
             document.getElementById('inputSection').style.display = 'none';
             document.getElementById('resetSection').style.display = 'block';
 
-            // '||'로 줄바꿈 분리
             const rows = rawData.split('||');
             const container = document.getElementById('listContainer');
             container.innerHTML = '';
 
             rows.forEach(row => {
-                // ';;'로 데이터 분리
                 const cols = row.split(';;');
                 if (cols.length < 4) return;
 
@@ -130,12 +116,17 @@
                 const bankName = cols[1];
                 const accountNum = cols[2];
                 const holderName = cols[3];
+                const fmtAmount = Number(amount).toLocaleString() + '원';
+
+                // ★ 수정된 부분: 전체 텍스트 만들기
+                const copyText = `${fmtAmount} ${bankName} ${accountNum} ${holderName}`;
 
                 const card = document.createElement('div');
                 card.className = 'card';
-                card.onclick = function() { copyToClipboard(accountNum, card); };
+                
+                // 클릭하면 전체 텍스트 복사
+                card.onclick = function() { copyToClipboard(copyText, card); };
 
-                const fmtAmount = Number(amount).toLocaleString() + '원';
                 card.innerHTML = `
                     <div class="info">
                         <span class="amount">${fmtAmount}</span>
@@ -147,7 +138,6 @@
             });
         }
 
-        // 3. 복사 기능
         function copyToClipboard(text, element) {
             const textarea = document.createElement('textarea');
             textarea.value = text;
@@ -156,7 +146,7 @@
             document.execCommand('copy');
             document.body.removeChild(textarea);
             element.classList.add('done');
-            showToast(`${text} 복사됨`);
+            showToast("복사 완료!");
         }
 
         function showToast(msg) {
