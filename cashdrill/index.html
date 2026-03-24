@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>캐시드릴 - 충전만 하면 현금이 쌓인다!</title>
+  <meta name="description" content="충전기 꽂으면 자동으로 광물이 쌓이고, 정제하면 진짜 현금으로! 지금 바로 캐시드릴을 시작하세요.">
+  <meta property="og:title" content="캐시드릴 - 충전만 하면 현금이 쌓인다!">
+  <meta property="og:description" content="충전기 꽂으면 자동으로 광물이 쌓이고, 정제하면 진짜 현금으로!">
+  <meta property="og:image" content="https://gold-step.kr/cashdrill/images/app_icon.png">
+  <meta property="og:url" content="https://gold-step.kr/cashdrill/">
+  <link rel="icon" href="images/app_icon.png">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0B0E14;
+      color: #E0E0E0;
+      overflow-x: hidden;
+    }
+
+    /* ===== HERO ===== */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 80px 20px 60px;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(ellipse at 30% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 70% 80%, rgba(0, 255, 136, 0.05) 0%, transparent 50%);
+      animation: bgPulse 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes bgPulse {
+      0% { transform: scale(1) rotate(0deg); }
+      100% { transform: scale(1.1) rotate(3deg); }
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 600px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      background: rgba(255, 215, 0, 0.15);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: 20px;
+      font-size: 13px;
+      color: #FFD700;
+      margin-bottom: 24px;
+      letter-spacing: 1px;
+    }
+
+    .hero h1 {
+      font-size: clamp(32px, 8vw, 56px);
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: goldShimmer 3s ease-in-out infinite;
+    }
+
+    @keyframes goldShimmer {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .hero p {
+      font-size: clamp(16px, 3vw, 20px);
+      color: #999;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+
+    .btn-store {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: 14px;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 700;
+      transition: all 0.3s ease;
+    }
+
+    .btn-store.google {
+      background: linear-gradient(135deg, #00C853, #00E676);
+      color: #000;
+    }
+
+    .btn-store.apple {
+      background: #FFF;
+      color: #000;
+    }
+
+    .btn-store:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(255, 215, 0, 0.2);
+    }
+
+    .btn-store svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .hero-phone {
+      position: relative;
+      display: inline-block;
+    }
+
+    .hero-phone img {
+      width: 260px;
+      max-width: 70vw;
+      border-radius: 24px;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6),
+                  0 0 60px rgba(255, 215, 0, 0.1);
+      animation: phoneFloat 4s ease-in-out infinite;
+    }
+
+    @keyframes phoneFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+
+    .hero-glow {
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 200px;
+      height: 40px;
+      background: radial-gradient(ellipse, rgba(255, 215, 0, 0.3), transparent);
+      filter: blur(20px);
+    }
+
+    /* ===== STATS ===== */
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      padding: 40px 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 32px;
+      font-weight: 900;
+      color: #FFD700;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #777;
+      margin-top: 4px;
+    }
+
+    /* ===== SECTION COMMON ===== */
+    section {
+      padding: 80px 20px;
+    }
+
+    .section-inner {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: clamp(24px, 5vw, 36px);
+      font-weight: 900;
+      margin-bottom: 12px;
+      color: #FFF;
+    }
+
+    .section-subtitle {
+      text-align: center;
+      font-size: 16px;
+      color: #777;
+      margin-bottom: 48px;
+    }
+
+    /* ===== VIDEO ===== */
+    .video-section {
+      background: linear-gradient(180deg, #0B0E14 0%, #111520 50%, #0B0E14 100%);
+    }
+
+    .video-container {
+      max-width: 350px;
+      margin: 0 auto;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+                  0 0 40px rgba(255, 215, 0, 0.08);
+      position: relative;
+      aspect-ratio: 9/16;
+    }
+
+    .video-container iframe,
+    .video-container lite-youtube {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .video-container a.yt-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background: #000 url('https://img.youtube.com/vi/40GGaZgvqmE/maxresdefault.jpg') center/cover no-repeat;
+      position: relative;
+      text-decoration: none;
+    }
+
+    .video-container a.yt-link::after {
+      content: '▶';
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 68px;
+      height: 68px;
+      background: rgba(255, 0, 0, 0.85);
+      border-radius: 16px;
+      font-size: 28px;
+      color: #FFF;
+      padding-left: 4px;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .video-container a.yt-link:hover::after {
+      background: rgba(255, 0, 0, 1);
+      transform: scale(1.1);
+    }
+
+    /* ===== FEATURES ===== */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: linear-gradient(135deg, #141820 0%, #1A1F2E 100%);
+      border: 1px solid #252A3A;
+      border-radius: 20px;
+      padding: 32px;
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255, 215, 0, 0.3);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: 16px;
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #FFF;
+      margin-bottom: 8px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: #999;
+      line-height: 1.6;
+    }
+
+    /* ===== HOW IT WORKS ===== */
+    .steps {
+      display: flex;
+      gap: 20px;
+      overflow-x: auto;
+      padding-bottom: 20px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .steps::-webkit-scrollbar { display: none; }
+
+    .step-card {
+      flex: 0 0 280px;
+      min-height: 260px;
+      scroll-snap-align: center;
+      text-align: center;
+      background: linear-gradient(135deg, #141820 0%, #1A1F2E 100%);
+      border: 1px solid #252A3A;
+      border-radius: 20px;
+      padding: 32px 24px;
+      position: relative;
+    }
+
+    .step-number {
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 900;
+      color: #000;
+    }
+
+    .step-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #FFF;
+      margin: 8px 0;
+    }
+
+    .step-card p {
+      font-size: 13px;
+      color: #999;
+      line-height: 1.5;
+    }
+
+    .step-emoji {
+      font-size: 48px;
+      margin-bottom: 8px;
+    }
+
+    /* ===== SCREENSHOTS ===== */
+    .screenshots-section {
+      background: linear-gradient(180deg, #0B0E14 0%, #0F1319 50%, #0B0E14 100%);
+    }
+
+    .screenshots-scroll {
+      display: flex;
+      gap: 20px;
+      overflow-x: auto;
+      padding: 0 20px 20px;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .screenshots-scroll::-webkit-scrollbar { display: none; }
+
+    .screenshot-item {
+      flex: 0 0 220px;
+      scroll-snap-align: center;
+    }
+
+    .screenshot-item img {
+      width: 100%;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+      transition: transform 0.3s ease;
+    }
+
+    .screenshot-item img:hover {
+      transform: scale(1.03);
+    }
+
+    /* ===== REVIEWS ===== */
+    .reviews-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .review-card {
+      background: linear-gradient(135deg, #141820 0%, #1A1F2E 100%);
+      border: 1px solid #252A3A;
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    .review-stars {
+      color: #FFD700;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+
+    .review-text {
+      font-size: 14px;
+      color: #CCC;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .review-author {
+      font-size: 13px;
+      color: #666;
+    }
+
+    /* ===== CTA ===== */
+    .cta-section {
+      text-align: center;
+      padding: 80px 20px;
+      position: relative;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.06) 0%, transparent 60%);
+    }
+
+    .cta-section h2 {
+      font-size: clamp(24px, 5vw, 40px);
+      font-weight: 900;
+      color: #FFF;
+      margin-bottom: 12px;
+      position: relative;
+    }
+
+    .cta-section p {
+      font-size: 16px;
+      color: #999;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      position: relative;
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      padding: 40px 20px;
+      border-top: 1px solid #1A1F2E;
+      text-align: center;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: #666;
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: #FFD700; }
+
+    .footer-copyright {
+      font-size: 12px;
+      color: #444;
+    }
+
+    /* ===== PARTICLES ===== */
+    .particle {
+      position: fixed;
+      width: 3px;
+      height: 3px;
+      background: #FFD700;
+      border-radius: 50%;
+      opacity: 0;
+      pointer-events: none;
+      animation: particleFall linear infinite;
+    }
+
+    @keyframes particleFall {
+      0% { opacity: 0; transform: translateY(-10vh) translateX(0); }
+      10% { opacity: 0.4; }
+      90% { opacity: 0.2; }
+      100% { opacity: 0; transform: translateY(100vh) translateX(30px); }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 600px) {
+      .hero { padding: 60px 16px 40px; }
+      .hero-phone img { width: 220px; }
+      .stats { gap: 24px; }
+      .stat-number { font-size: 24px; }
+      section { padding: 60px 16px; }
+      .step-card { flex: 0 0 240px; }
+      .screenshot-item { flex: 0 0 180px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 금가루 파티클 -->
+  <div class="particle" style="left:10%; animation-duration:8s; animation-delay:0s;"></div>
+  <div class="particle" style="left:20%; animation-duration:12s; animation-delay:2s;"></div>
+  <div class="particle" style="left:35%; animation-duration:10s; animation-delay:4s;"></div>
+  <div class="particle" style="left:50%; animation-duration:9s; animation-delay:1s;"></div>
+  <div class="particle" style="left:65%; animation-duration:11s; animation-delay:3s;"></div>
+  <div class="particle" style="left:80%; animation-duration:7s; animation-delay:5s;"></div>
+  <div class="particle" style="left:90%; animation-duration:13s; animation-delay:2s;"></div>
+
+  <!-- ===== HERO ===== -->
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-badge">&#9889; 충전하는 동안 자동으로 적립</div>
+      <h1>충전만 하면<br>현금이 쌓인다</h1>
+      <p>충전기 꽂고 자고 일어나면 끝.<br>광물이 쌓이고, 정제하면 진짜 현금이 됩니다.</p>
+
+      <div class="hero-buttons">
+        <a href="https://play.google.com/store/apps/details?id=com.cashdrill.app&hl=ko" class="btn-store google" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.199l2.302 2.302-2.302 2.302-2.594-2.302 2.594-2.302zM5.864 2.658L16.8 9.99l-2.302 2.302-8.634-8.634z"/></svg>
+          Google Play
+        </a>
+        <a href="https://apps.apple.com/kr/app/%EC%BA%90%EC%8B%9C%EB%93%9C%EB%A6%B4/id6760348917" class="btn-store apple" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          App Store
+        </a>
+      </div>
+
+      <div class="hero-phone">
+        <img src="images/two.png" alt="캐시드릴 앱 화면">
+        <div class="hero-glow"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== STATS ===== -->
+  <div class="stats">
+    <div class="stat-item">
+      <div class="stat-number">10,000+</div>
+      <div class="stat-label">다운로드</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">4.5</div>
+      <div class="stat-label">평점</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">24/7</div>
+      <div class="stat-label">자동 채굴</div>
+    </div>
+  </div>
+
+  <!-- ===== VIDEO ===== -->
+  <section class="video-section">
+    <div class="section-inner">
+      <h2 class="section-title">30초만에 확인하세요</h2>
+      <p class="section-subtitle">충전하고, 모으고, 현금으로 바꾸는 과정</p>
+      <div class="video-container">
+        <a class="yt-link" href="https://www.youtube.com/shorts/40GGaZgvqmE" target="_blank" title="캐시드릴 소개 영상 보기"></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FEATURES ===== -->
+  <section>
+    <div class="section-inner">
+      <h2 class="section-title">왜 캐시드릴인가요?</h2>
+      <p class="section-subtitle">아무것도 안 해도 돈이 쌓이는 이유</p>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">&#9889;</div>
+          <h3>충전만 하면 끝</h3>
+          <p>유선, 무선, 보조배터리 뭐든 OK. 충전 중이면 10분마다 조각이 자동으로 쌓입니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128142;</div>
+          <h3>원석 정제 = 현금</h3>
+          <p>조각 10개로 원석을 만들고, 정제하면 캐시 획득! 프리미엄 정제로 최대 1,000캐시까지.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#128176;</div>
+          <h3>진짜 현금 출금</h3>
+          <p>모은 캐시는 내 계좌로 바로 출금. 실시간 출금 현황도 확인 가능합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#127769;</div>
+          <h3>자는 동안에도</h3>
+          <p>화면 꺼도, 다른 앱 써도 상관없어요. 충전 중이면 백그라운드에서 자동 채굴.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== HOW IT WORKS ===== -->
+  <section>
+    <div class="section-inner">
+      <h2 class="section-title">이렇게 하면 됩니다</h2>
+      <p class="section-subtitle">3단계면 충분해요</p>
+      <div class="steps">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-emoji">&#128268;</div>
+          <h3>충전기를 꽂으세요</h3>
+          <p>유선이든 무선이든 충전만 시작하면 10분마다 조각이 자동으로 쌓여요.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-emoji">&#9935;&#65039;</div>
+          <h3>원석을 정제하세요</h3>
+          <p>조각 10개로 원석을 만들고, 정제하면 보석 등급에 따라 캐시가 지급됩니다.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-emoji">&#128181;</div>
+          <h3>현금으로 출금하세요</h3>
+          <p>3,000원부터 내 계좌로 바로 출금. 영업일 7일 이내 입금됩니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SCREENSHOTS ===== -->
+  <section class="screenshots-section">
+    <div class="section-inner">
+      <h2 class="section-title">앱 미리보기</h2>
+      <p class="section-subtitle">실제 앱 화면을 확인하세요</p>
+    </div>
+    <div class="screenshots-scroll">
+      <div class="screenshot-item"><img src="images/two.png" alt="채굴 화면" loading="lazy"></div>
+      <div class="screenshot-item"><img src="images/five.png" alt="원석 제작" loading="lazy"></div>
+      <div class="screenshot-item"><img src="images/three.png" alt="정제 화면" loading="lazy"></div>
+      <div class="screenshot-item"><img src="images/one.png" alt="보석 획득" loading="lazy"></div>
+      <div class="screenshot-item"><img src="images/four.png" alt="출금 화면" loading="lazy"></div>
+    </div>
+  </section>
+
+  <!-- ===== REVIEWS ===== -->
+  <section>
+    <div class="section-inner">
+      <h2 class="section-title">실제 사용자 후기</h2>
+      <p class="section-subtitle">이미 많은 분들이 캐시드릴을 사용하고 있어요</p>
+      <div class="reviews-grid">
+        <div class="review-card">
+          <div class="review-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
+          <div class="review-text">"진짜 충전만 하면 되길래 반신반의했는데 출금까지 됐어요. 매일 자기 전에 충전기 꽂는 게 습관이 됐습니다."</div>
+          <div class="review-author">- 김** 님</div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
+          <div class="review-text">"다른 리워드앱처럼 광고 계속 봐야 하는 게 아니라 그냥 충전만 하면 돼서 너무 편해요. 정제하는 재미도 있고요."</div>
+          <div class="review-author">- 이** 님</div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">&#11088;&#11088;&#11088;&#11088;&#11088;</div>
+          <div class="review-text">"처음엔 뭔가 했는데 광물 모아서 정제하는 게 게임 같아서 재밌어요. 출금도 잘 됩니다."</div>
+          <div class="review-author">- 박** 님</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CTA ===== -->
+  <section class="cta-section">
+    <h2>지금 시작하세요</h2>
+    <p>오늘 밤 충전기 꽂는 것부터 시작입니다</p>
+    <div class="cta-buttons">
+      <a href="https://play.google.com/store/apps/details?id=com.cashdrill.app&hl=ko" class="btn-store google" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734a1 1 0 01.609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.199l2.302 2.302-2.302 2.302-2.594-2.302 2.594-2.302zM5.864 2.658L16.8 9.99l-2.302 2.302-8.634-8.634z"/></svg>
+        Google Play
+      </a>
+      <a href="https://apps.apple.com/kr/app/%EC%BA%90%EC%8B%9C%EB%93%9C%EB%A6%B4/id6760348917" class="btn-store apple" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+        App Store
+      </a>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div class="footer-links">
+      <a href="https://gold-step.kr/">고객센터</a>
+      <a href="https://gold-step.kr/privacy.html">개인정보처리방침</a>
+      <a href="https://gold-step.kr/terms.html">이용약관</a>
+      <a href="mailto:support@gold-step.kr">문의하기</a>
+    </div>
+    <div class="footer-copyright">&copy; 2026 CashDrill. All rights reserved.</div>
+  </footer>
+
+</body>
+</html>
