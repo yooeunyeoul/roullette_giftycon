@@ -1,4 +1,5 @@
 google.com, pub-2557362474312386, DIRECT, f08c47fec0942fa0
+facebook.com, 1098625852241546, DIRECT, c3e20eee3f780d68
 rubiconproject.com, 22884, DIRECT, 0bfd66d529a55807
 inmobi.com, 619a17282b434001900381e3a46cdb65, DIRECT, 83e75a7ae333ca9d
 vungle.com,68fb55acc95620ff5d00ea8f,DIRECT,c107d686becd2d77
