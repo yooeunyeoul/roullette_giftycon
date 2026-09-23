@@ -96,15 +96,15 @@
       fee: 500,
       rejectNote: '계좌번호 오류',
       async list(key) {
-        const r = await api(this.base + '/v1/admin/withdraw?limit=200', key);
+        const r = await api(this.base + '/api/v1/admin/withdraw?limit=200', key);
         return (r.requests || []).map(w => ({
           id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
           holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
         }));
       },
       // completed = 송금 완료(+800 페이백 푸시) / rejected = 캐시 환불 + "계좌번호 오류" 푸시
-      complete(key, id) { return api(this.base + '/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' }); },
-      reject(key, id)   { return api(this.base + '/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote }); },
+      complete(key, id) { return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' }); },
+      reject(key, id)   { return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote }); },
     },
     gold: {
       label: '돈캐드릴',
