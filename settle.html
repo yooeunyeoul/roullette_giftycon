@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>출금 정산</title>
+<!--
+  출금 정산 콘솔 (2026-09-23) — 캐시드릴 · 돈캐드릴 공용.
+  · 서버에서 대기 목록을 직접 불러오고(붙여넣기·QR 불필요), 카드에서 완료/실패를 누르면 그 자리에서 서버 상태가 바뀐다.
+  · 실제 송금은 오너가 카카오뱅크(사업자통장)에서 한다 — 카드 탭 = 계좌번호 복사, 금액 탭 = 금액 복사.
+  · 키는 이 폰 브라우저(localStorage)에만 저장. 정산 전용 키(SETTLEMENT_API_KEY) 권장 — 출금 처리 외엔 아무것도 못 한다.
+  · 유저 입력값(예금주 등)은 전부 textContent 로만 렌더링한다(XSS 방지 — 옛 페이지는 innerHTML 이었다).
+-->
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#262a33; --text:#e8eaf0; --muted:#8b93a3; --ok:#22c55e; --bad:#ef4444; --accent:#4f7cff; --amber:#f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system, "Pretendard", "Noto Sans KR", sans-serif; padding: env(safe-area-inset-top,0) 12px calc(24px + env(safe-area-inset-bottom,0)); }
+  h1 { font-size:18px; margin:14px 0 10px; display:flex; align-items:center; gap:8px; }
+  .seg { display:flex; gap:6px; margin-bottom:10px; }
+  .seg button { flex:1; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--muted); font-size:15px; font-weight:700; }
+  .seg button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  input[type=password], input[type=text] { flex:1; padding:11px 12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--text); font-size:15px; }
+  .btn { padding:12px 14px; border-radius:10px; border:0; font-size:15px; font-weight:700; color:#fff; background:var(--accent); }
+  .btn.ghost { background:transparent; border:1px solid var(--line); color:var(--muted); }
+  .btn:disabled { opacity:.5; }
+  .tabs { display:flex; gap:6px; margin:6px 0 10px; }
+  .tabs button { flex:1; padding:9px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--muted); font-size:13px; }
+  .tabs button.on { color:var(--text); border-color:var(--text); }
+  .list { display:flex; flex-direction:column; gap:8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .card.done { opacity:.55; }
+  .card.fail { border-color:var(--bad); }
+  .amt { font-size:22px; font-weight:800; letter-spacing:-.3px; }
+  .amt small { font-size:12px; color:var(--muted); font-weight:500; margin-left:6px; }
+  .acct { font-size:17px; font-family:ui-monospace, Menlo, monospace; margin-top:4px; word-break:break-all; }
+  .holder { color:var(--muted); font-size:14px; margin-top:2px; }
+  .holder b { color:var(--text); }
+  .meta { color:var(--muted); font-size:11px; margin-top:4px; }
+  .copyrow { display:flex; gap:6px; margin-top:10px; }
+  .copyrow button { flex:1; padding:11px; border-radius:9px; border:1px solid var(--line); background:#20242d; color:var(--text); font-size:14px; }
+  .acts { display:flex; gap:6px; margin-top:8px; }
+  .acts button { flex:1; padding:12px; border-radius:9px; border:0; font-size:15px; font-weight:700; color:#fff; }
+  .acts .fail { background:var(--bad); }
+  .acts .ok { background:var(--ok); }
+  .acts .restore { background:#3a3f4b; }
+  .empty { color:var(--muted); text-align:center; padding:30px 0; font-size:14px; }
+  #toast { position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom,0)); transform:translateX(-50%); background:#fff; color:#111; padding:10px 16px; border-radius:999px; font-size:14px; font-weight:700; opacity:0; transition:opacity .15s; pointer-events:none; }
+  #toast.show { opacity:1; }
+  .hidden { display:none !important; }
+  .note { color:var(--muted); font-size:12px; line-height:1.5; margin:6px 0 12px; }
+  .warn { color:var(--amber); }
+</style>
+</head>
+<body>
+  <h1>💸 출금 정산 <span id="count" style="color:var(--muted);font-size:13px;font-weight:500"></span></h1>
+
+  <div class="seg" id="appSeg">
+    <button data-app="cashdrill" class="on">캐시드릴</button>
+    <button data-app="gold">돈캐드릴</button>
+  </div>
+
+  <div class="row" id="keyRow">
+    <input type="password" id="keyInput" placeholder="정산 키 (이 폰에만 저장)" autocomplete="off">
+    <button class="btn ghost" id="keySave">저장</button>
+  </div>
+  <div class="row">
+    <button class="btn" id="loadBtn" style="flex:1">대기 목록 불러오기</button>
+    <button class="btn ghost" id="keyEdit" title="키 변경">🔑</button>
+  </div>
+  <p class="note" id="hint">계좌번호 → 카카오뱅크에 붙여넣기 → 금액 붙여넣기 → 이체 → <b>완료</b>. 카카오뱅크에 뜬 예금주가 다르거나 없는 계좌면 <b>실패</b>(유저에게 "계좌번호 오류" 푸시 + 캐시 환불).</p>
+
+  <div class="tabs">
+    <button data-tab="pending" class="on">대기 <span id="nPending">0</span></button>
+    <button data-tab="fail">실패 <span id="nFail">0</span></button>
+    <button data-tab="done">완료 <span id="nDone">0</span></button>
+  </div>
+  <div id="pendingList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
+  <div id="failList" class="list hidden"></div>
+  <div id="doneList" class="list hidden"></div>
+
+  <div id="toast">복사 완료</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── 앱별 설정 ─────────────────────────────────────────────────────────
+  //   fee: 유저 신청 금액에서 오너가 떼고 보내는 이체 수수료(캐시드릴은 500원 떼고 800캐시 페이백).
+  //   돈캐드릴은 수수료 규정이 없어 0 — 다르면 여기 숫자만 바꾼다.
+  const APPS = {
+    cashdrill: {
+      label: '캐시드릴',
+      base: 'https://cashdrill-backend.fly.dev',
+      fee: 500,
+      rejectNote: '계좌번호 오류',
+      async list(key) {
+        const r = await api(this.base + '/v1/admin/withdraw?limit=200', key);
+        return (r.requests || []).map(w => ({
+          id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
+          holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+        }));
+      },
+      // completed = 송금 완료(+800 페이백 푸시) / rejected = 캐시 환불 + "계좌번호 오류" 푸시
+      complete(key, id) { return api(this.base + '/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' }); },
+      reject(key, id)   { return api(this.base + '/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote }); },
+    },
+    gold: {
+      label: '돈캐드릴',
+      base: 'https://reward-factory-backend.fly.dev',
+      fee: 0,
+      appId: 'com.rewardfactory.gold',
+      async list(key) {
+        // requested(신청) + approved(승인만 되고 미지급) 둘 다 "보낼 것". 캐시파이·기프티콘 건은 뺀다.
+        const [a, b] = await Promise.all([
+          api(this.base + '/admin/withdrawals?status=requested', key),
+          api(this.base + '/admin/withdrawals?status=approved', key),
+        ]);
+        return [...(a.withdrawals || []), ...(b.withdrawals || [])]
+          .filter(w => w.appId === this.appId && w.method === 'cash')
+          .map(w => ({
+            id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
+            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+          }))
+          .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
+      },
+      // 상태 기계가 requested → approved → paid 라 완료는 두 번 부른다(이미 approved 면 paid 만).
+      async complete(key, id, item) {
+        if (item.status === 'requested') await api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/approve', key, 'POST');
+        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/paid', key, 'POST');
+      },
+      reject(key, id) { return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST'); },
+    },
+  };
+
+  let app = localStorage.getItem('settle.app') || 'cashdrill';
+  const keyOf = (a) => localStorage.getItem('settle.key.' + a) || '';
+
+  async function api(url, key, method, body) {
+    const res = await fetch(url, {
+      method: method || 'GET',
+      headers: Object.assign({ 'Authorization': 'Bearer ' + key }, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    if (res.status === 401) throw new Error('키가 틀렸어요 (401)');
+    if (res.status === 503) throw new Error('서버에 정산 키가 없어요 (503)');
+    if (!res.ok) throw new Error((data && (data.error?.message || data.error || data.message)) || ('HTTP ' + res.status));
+    return data || {};
+  }
+
+  // ── DOM 헬퍼 (텍스트만 — innerHTML 금지) ─────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const won = (n) => n.toLocaleString('ko-KR') + '원';
+  const digits = (s) => (s || '').replace(/\D/g, '');
+
+  let toastTimer;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1200); }
+  async function copy(text, label) {
+    try { await navigator.clipboard.writeText(text); toast((label || '') + ' 복사됨'); }
+    catch (_) {
+      const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast((label || '') + ' 복사됨'); } catch (e) { toast('복사 실패'); }
+      ta.remove();
+    }
+  }
+
+  // ── 상태 ─────────────────────────────────────────────────────────────────
+  const items = new Map(); // id → item
+  function counts() {
+    let p = 0, f = 0, d = 0;
+    items.forEach(i => { if (i.ui === 'pending') p++; else if (i.ui === 'fail') f++; else d++; });
+    $('nPending').textContent = p; $('nFail').textContent = f; $('nDone').textContent = d;
+    $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건';
+  }
+
+  function card(item) {
+    const cfg = APPS[app];
+    const send = Math.max(0, item.amount - cfg.fee);
+    const c = el('div', 'card');
+    c.dataset.id = item.id;
+
+    const amt = el('div', 'amt', won(send));
+    if (cfg.fee) amt.appendChild(el('small', null, '신청 ' + won(item.amount) + ' − 수수료 ' + cfg.fee));
+    c.appendChild(amt);
+    c.appendChild(el('div', 'acct', item.bank + ' ' + item.account));
+    const h = el('div', 'holder', '예금주 '); h.appendChild(el('b', null, item.holder)); c.appendChild(h);
+    c.appendChild(el('div', 'meta', (item.status === 'approved' ? '승인됨 · ' : '') + new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
+
+    const cr = el('div', 'copyrow');
+    const b1 = el('button', null, '계좌번호 복사'); b1.onclick = () => copy(digits(item.account), '계좌번호');
+    const b2 = el('button', null, '금액 복사');     b2.onclick = () => copy(String(send), '금액');
+    const b3 = el('button', null, '전체 복사');     b3.onclick = () => copy(won(send) + ' ' + item.bank + ' ' + item.account + ' ' + item.holder, '전체');
+    cr.append(b1, b2, b3); c.appendChild(cr);
+
+    const acts = el('div', 'acts');
+    if (item.ui === 'pending') {
+      const bf = el('button', 'fail', '실패'); bf.onclick = () => act(item, 'reject', c);
+      const bo = el('button', 'ok', '완료');   bo.onclick = () => act(item, 'complete', c);
+      acts.append(bf, bo);
+    } else {
+      acts.appendChild(el('div', 'meta', item.ui === 'fail' ? '반려 처리됨 — 유저에게 푸시 발송' : '완료 처리됨 — 유저에게 푸시 발송'));
+    }
+    c.appendChild(acts);
+    if (item.ui === 'fail') c.classList.add('fail');
+    if (item.ui === 'done') c.classList.add('done');
+    return c;
+  }
+
+  async function act(item, kind, cardEl) {
+    const cfg = APPS[app];
+    const send = Math.max(0, item.amount - cfg.fee);
+    const q = kind === 'complete'
+      ? won(send) + ' → ' + item.holder + '\n카카오뱅크에서 이체를 마쳤나요?\n(되돌릴 수 없음)'
+      : item.holder + ' ' + item.bank + ' ' + item.account + '\n반려할까요? 캐시가 환불되고 "' + (cfg.rejectNote || '계좌 오류') + '" 푸시가 나갑니다.\n(되돌릴 수 없음)';
+    if (!confirm(q)) return;
+    const btns = cardEl.querySelectorAll('.acts button'); btns.forEach(b => b.disabled = true);
+    try {
+      if (kind === 'complete') await cfg.complete(keyOf(app), item.id, item);
+      else await cfg.reject(keyOf(app), item.id, item);
+      item.ui = kind === 'complete' ? 'done' : 'fail';
+      cardEl.remove();
+      const target = $(item.ui === 'done' ? 'doneList' : 'failList');
+      target.prepend(card(item));
+      toast(kind === 'complete' ? '완료 처리됨' : '반려 처리됨');
+      counts();
+      if (!$('pendingList').children.length) $('pendingList').appendChild(el('div', 'empty', '대기 건이 없습니다 🎉'));
+    } catch (e) {
+      alert('처리 실패: ' + e.message);
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  async function load() {
+    const key = keyOf(app);
+    if (!key) { alert('먼저 정산 키를 저장해 주세요'); $('keyRow').classList.remove('hidden'); return; }
+    const btn = $('loadBtn'); btn.disabled = true; btn.textContent = '불러오는 중…';
+    try {
+      const list = await APPS[app].list(key);
+      items.clear();
+      const pl = $('pendingList'); pl.replaceChildren();
+      $('failList').replaceChildren(); $('doneList').replaceChildren();
+      list.forEach(it => { it.ui = 'pending'; items.set(it.id, it); pl.appendChild(card(it)); });
+      if (!list.length) pl.appendChild(el('div', 'empty', '대기 건이 없습니다 🎉'));
+      counts();
+      showTab('pending');
+    } catch (e) {
+      alert('불러오기 실패: ' + e.message);
+    } finally { btn.disabled = false; btn.textContent = '대기 목록 불러오기'; }
+  }
+
+  function showTab(name) {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+    $('pendingList').classList.toggle('hidden', name !== 'pending');
+    $('failList').classList.toggle('hidden', name !== 'fail');
+    $('doneList').classList.toggle('hidden', name !== 'done');
+  }
+
+  function setApp(a) {
+    app = a; localStorage.setItem('settle.app', a);
+    document.querySelectorAll('#appSeg button').forEach(b => b.classList.toggle('on', b.dataset.app === a));
+    $('keyRow').classList.toggle('hidden', !!keyOf(a));
+    $('keyInput').value = '';
+    items.clear(); counts();
+    $('pendingList').replaceChildren(el('div', 'empty', APPS[a].label + ' — 불러오기를 눌러 주세요'));
+    $('failList').replaceChildren(); $('doneList').replaceChildren();
+    showTab('pending');
+  }
+
+  // ── 이벤트 ───────────────────────────────────────────────────────────────
+  document.querySelectorAll('#appSeg button').forEach(b => b.onclick = () => setApp(b.dataset.app));
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+  $('keySave').onclick = () => {
+    const v = $('keyInput').value.trim();
+    if (!v) { alert('키를 입력해 주세요'); return; }
+    localStorage.setItem('settle.key.' + app, v);
+    $('keyInput').value = ''; $('keyRow').classList.add('hidden'); toast('키 저장됨');
+  };
+  $('keyEdit').onclick = () => { $('keyRow').classList.toggle('hidden'); $('keyInput').focus(); };
+  $('loadBtn').onclick = load;
+
+  setApp(app);
+})();
+</script>
+</body>
+</html>
