@@ -6,7 +6,8 @@
 <meta name="robots" content="noindex, nofollow">
 <title>출금 정산</title>
 <!--
-  출금 정산 콘솔 (2026-09-23) — 캐시드릴 · 돈캐드릴 공용.
+  출금 정산 콘솔 (2026-09-23) — 캐시드릴 · 돈캐드릴 공용. 2026-09-26 캐시파이(페이팔) 탭 추가.
+  · 캐시파이는 페이팔이다: 이메일 복사 → 페이팔 앱에서 USD 송금 → 송금 완료. 차단 계정은 서버가 완료를 막는다.
   · 서버에서 대기 목록을 직접 불러오고(붙여넣기·QR 불필요), 카드에서 완료/실패를 누르면 그 자리에서 서버 상태가 바뀐다.
   · 실제 송금은 오너가 카카오뱅크(사업자통장)에서 한다 — 카드 탭 = 계좌번호 복사, 금액 탭 = 금액 복사.
   · 키는 이 폰 브라우저(localStorage)에만 저장. 정산 전용 키(SETTLEMENT_API_KEY) 권장 — 출금 처리 외엔 아무것도 못 한다.
@@ -51,6 +52,8 @@
   .hidden { display:none !important; }
   .note { color:var(--muted); font-size:12px; line-height:1.5; margin:6px 0 12px; }
   .warn { color:var(--amber); }
+  .blocked { display:inline-block; margin-top:6px; padding:4px 8px; border-radius:6px; background:rgba(239,68,68,.15); color:var(--bad); font-size:13px; font-weight:700; }
+  .card.isblocked { border-color:var(--bad); }
 </style>
 </head>
 <body>
@@ -59,6 +62,7 @@
   <div class="seg" id="appSeg">
     <button data-app="cashdrill" class="on">캐시드릴</button>
     <button data-app="gold">돈캐드릴</button>
+    <button data-app="cashfi">캐시파이</button>
   </div>
 
   <div class="row" id="keyRow">
@@ -69,7 +73,8 @@
     <button class="btn" id="loadBtn" style="flex:1">대기 목록 불러오기</button>
     <button class="btn ghost" id="keyEdit" title="키 변경">🔑</button>
   </div>
-  <p class="note" id="hint">계좌번호 → 카카오뱅크에 붙여넣기 → 금액 붙여넣기 → 이체 → <b>완료</b>. 카카오뱅크에 뜬 예금주가 다르거나 없는 계좌면 <b>실패</b>(유저에게 "계좌번호 오류" 푸시 + 캐시 환불).</p>
+  <p class="note" id="hint" data-bank="1">계좌번호 → 카카오뱅크에 붙여넣기 → 금액 붙여넣기 → 이체 → <b>완료</b>. 카카오뱅크에 뜬 예금주가 다르거나 없는 계좌면 <b>실패</b>(유저에게 "계좌번호 오류" 푸시 + 캐시 환불).</p>
+  <p class="note hidden" id="hintPaypal">이메일 복사 → 페이팔 앱에서 <b>USD</b> 로 송금(금액 복사) → <b>송금 완료</b>. 보내면 안 되는 건은 <b>거절</b>(사유 필수, 캐시 환불). <span class="warn">빨간 "차단 계정" 은 보내지 마세요.</span></p>
 
   <div class="tabs">
     <button data-tab="pending" class="on">대기 <span id="nPending">0</span></button>
@@ -132,10 +137,32 @@
       },
       reject(key, id) { return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST'); },
     },
+    // 캐시파이 = 페이팔(USD). 금액은 **센트**로 온다(amountUsd 500 = $5.00).
+    //   같은 백엔드(reward-factory)라 키도 돈캐드릴과 같다 — 따로 저장 안 했으면 돈캐드릴 키를 쓴다.
+    cashfi: {
+      label: '캐시파이',
+      kind: 'paypal',
+      base: 'https://reward-factory-backend.fly.dev',
+      fee: 0,
+      appId: 'com.rewardfactory.cashfi',
+      keyFallback: 'gold',
+      async list(key) {
+        const r = await api(this.base + '/admin/paypal?appId=' + encodeURIComponent(this.appId) + '&status=PENDING', key);
+        // 금액순으로 묶는다 — 같은 금액을 연달아 보내면 금액 입력을 한 번만 확인하면 된다.
+        return (r.withdrawals || []).map(w => ({
+          id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
+          createdAt: w.createdAt, status: w.status,
+        })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
+      },
+      complete(key, id) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/mark-paid', key, 'POST', { appId: this.appId, note: '정산 페이지' }); },
+      reject(key, id, item, reason) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reason: reason }); },
+    },
   };
 
   let app = localStorage.getItem('settle.app') || 'cashdrill';
-  const keyOf = (a) => localStorage.getItem('settle.key.' + a) || '';
+  const keyOf = (a) => localStorage.getItem('settle.key.' + a)
+    || (APPS[a] && APPS[a].keyFallback ? localStorage.getItem('settle.key.' + APPS[a].keyFallback) : '') || '';
+  const usd = (c) => '$' + (c / 100).toFixed(2);
 
   async function api(url, key, method, body) {
     const res = await fetch(url, {
@@ -174,11 +201,40 @@
     let p = 0, f = 0, d = 0;
     items.forEach(i => { if (i.ui === 'pending') p++; else if (i.ui === 'fail') f++; else d++; });
     $('nPending').textContent = p; $('nFail').textContent = f; $('nDone').textContent = d;
-    $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건';
+    let sum = 0; items.forEach(i => { if (i.ui === 'pending' && i.cents != null && !i.blocked) sum += i.cents; });
+    $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건' + (APPS[app].kind === 'paypal' ? ' · 합계 ' + usd(sum) : '');
+  }
+
+  function paypalCard(item) {
+    const c = el('div', 'card' + (item.blocked ? ' isblocked' : ''));
+    c.dataset.id = item.id;
+    c.appendChild(el('div', 'amt', usd(item.cents)));
+    c.appendChild(el('div', 'acct', item.email));
+    if (item.blocked) c.appendChild(el('div', 'blocked', '⛔ 차단 계정 — 보내지 마세요 (거절하면 캐시 환불)'));
+    c.appendChild(el('div', 'meta', new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
+
+    const cr = el('div', 'copyrow');
+    const b1 = el('button', null, '이메일 복사'); b1.onclick = () => copy(item.email, '이메일');
+    const b2 = el('button', null, '금액 복사');   b2.onclick = () => copy((item.cents / 100).toFixed(2), '금액');
+    cr.append(b1, b2); c.appendChild(cr);
+
+    const acts = el('div', 'acts');
+    if (item.ui === 'pending') {
+      const bf = el('button', 'fail', '거절'); bf.onclick = () => act(item, 'reject', c);
+      acts.appendChild(bf);
+      if (!item.blocked) { const bo = el('button', 'ok', '송금 완료'); bo.onclick = () => act(item, 'complete', c); acts.appendChild(bo); }
+    } else {
+      acts.appendChild(el('div', 'meta', item.ui === 'fail' ? '거절됨 — 캐시 환불 + 푸시 발송' : '완료 처리됨 — 유저에게 푸시 발송'));
+    }
+    c.appendChild(acts);
+    if (item.ui === 'fail') c.classList.add('fail');
+    if (item.ui === 'done') c.classList.add('done');
+    return c;
   }
 
   function card(item) {
     const cfg = APPS[app];
+    if (cfg.kind === 'paypal') return paypalCard(item);
     const send = Math.max(0, item.amount - cfg.fee);
     const c = el('div', 'card');
     c.dataset.id = item.id;
@@ -212,15 +268,27 @@
 
   async function act(item, kind, cardEl) {
     const cfg = APPS[app];
+    let reason = null;
+    if (cfg.kind === 'paypal') {
+      if (kind === 'complete') {
+        if (!confirm(usd(item.cents) + ' → ' + item.email + '\n페이팔에서 송금을 마쳤나요?\n(되돌릴 수 없음)')) return;
+      } else {
+        // 사유 필수 — 서버도 빈 사유는 400. 유저에게는 원문이 안 보인다(코드로만 분류).
+        reason = prompt(item.email + ' ' + usd(item.cents) + '\n거절 사유(필수 · 유저에게 안 보임). 캐시는 환불됩니다:', item.blocked ? '차단 계정' : '');
+        if (reason === null) return;
+        if (!reason.trim()) { alert('거절 사유를 입력해 주세요'); return; }
+      }
+    } else {
     const send = Math.max(0, item.amount - cfg.fee);
     const q = kind === 'complete'
       ? won(send) + ' → ' + item.holder + '\n카카오뱅크에서 이체를 마쳤나요?\n(되돌릴 수 없음)'
       : item.holder + ' ' + item.bank + ' ' + item.account + '\n반려할까요? 캐시가 환불되고 "' + (cfg.rejectNote || '계좌 오류') + '" 푸시가 나갑니다.\n(되돌릴 수 없음)';
     if (!confirm(q)) return;
+    }
     const btns = cardEl.querySelectorAll('.acts button'); btns.forEach(b => b.disabled = true);
     try {
       if (kind === 'complete') await cfg.complete(keyOf(app), item.id, item);
-      else await cfg.reject(keyOf(app), item.id, item);
+      else await cfg.reject(keyOf(app), item.id, item, reason);
       item.ui = kind === 'complete' ? 'done' : 'fail';
       cardEl.remove();
       const target = $(item.ui === 'done' ? 'doneList' : 'failList');
@@ -263,6 +331,8 @@
     app = a; localStorage.setItem('settle.app', a);
     document.querySelectorAll('#appSeg button').forEach(b => b.classList.toggle('on', b.dataset.app === a));
     $('keyRow').classList.toggle('hidden', !!keyOf(a));
+    $('hint').classList.toggle('hidden', APPS[a].kind === 'paypal');
+    $('hintPaypal').classList.toggle('hidden', APPS[a].kind !== 'paypal');
     $('keyInput').value = '';
     items.clear(); counts();
     $('pendingList').replaceChildren(el('div', 'empty', APPS[a].label + ' — 불러오기를 눌러 주세요'));
