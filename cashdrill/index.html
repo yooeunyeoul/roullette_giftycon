@@ -10,15 +10,21 @@
   <meta property="og:image" content="https://gold-step.kr/cashdrill/images/app_icon.png">
   <meta property="og:url" content="https://gold-step.kr/cashdrill/">
   <link rel="icon" href="images/app_icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- @import 는 CSS 를 다 받은 뒤에야 폰트를 받으러 간다(렌더 차단 + 글꼴 튐).
+       <link> 로 병렬 수신하고 display=swap 으로 레이아웃 밀림을 막는다. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap">
+  <!-- 색·간격 토큰은 사이트 공용 /assets/site.css 에서 온다. 아래 <style> 은 이 랜딩 전용 레이아웃이다. -->
+  <link rel="stylesheet" href="/assets/site.css">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #0B0E14;
-      color: #E0E0E0;
+      background: var(--ink);
+      color: var(--text);
       overflow-x: hidden;
     }
 
@@ -41,7 +47,7 @@
       left: -50%;
       width: 200%;
       height: 200%;
-      background: radial-gradient(ellipse at 30% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 50%),
+      background: radial-gradient(ellipse at 30% 20%, rgba(251, 172, 27, 0.08) 0%, transparent 50%),
                   radial-gradient(ellipse at 70% 80%, rgba(0, 255, 136, 0.05) 0%, transparent 50%);
       animation: bgPulse 8s ease-in-out infinite alternate;
     }
@@ -60,11 +66,11 @@
     .hero-badge {
       display: inline-block;
       padding: 6px 16px;
-      background: rgba(255, 215, 0, 0.15);
-      border: 1px solid rgba(255, 215, 0, 0.3);
+      background: rgba(251, 172, 27, 0.15);
+      border: 1px solid rgba(251, 172, 27, 0.3);
       border-radius: 20px;
       font-size: 13px;
-      color: #FFD700;
+      color: var(--gold);
       margin-bottom: 24px;
       letter-spacing: 1px;
     }
@@ -74,7 +80,7 @@
       font-weight: 900;
       line-height: 1.2;
       margin-bottom: 16px;
-      background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FFD700 100%);
+      background: linear-gradient(135deg, var(--gold-soft) 0%, var(--gold) 50%, var(--gold-soft) 100%);
       background-size: 200% 200%;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -89,7 +95,7 @@
 
     .hero p {
       font-size: clamp(16px, 3vw, 20px);
-      color: #999;
+      color: var(--text-muted);
       margin-bottom: 40px;
       line-height: 1.6;
     }
@@ -126,7 +132,7 @@
 
     .btn-store:hover {
       transform: translateY(-3px);
-      box-shadow: 0 12px 40px rgba(255, 215, 0, 0.2);
+      box-shadow: 0 12px 40px rgba(251, 172, 27, 0.2);
     }
 
     .btn-store svg {
@@ -144,7 +150,7 @@
       max-width: 70vw;
       border-radius: 24px;
       box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6),
-                  0 0 60px rgba(255, 215, 0, 0.1);
+                  0 0 60px rgba(251, 172, 27, 0.1);
       animation: phoneFloat 4s ease-in-out infinite;
     }
 
@@ -160,7 +166,7 @@
       transform: translateX(-50%);
       width: 200px;
       height: 40px;
-      background: radial-gradient(ellipse, rgba(255, 215, 0, 0.3), transparent);
+      background: radial-gradient(ellipse, rgba(251, 172, 27, 0.3), transparent);
       filter: blur(20px);
     }
 
@@ -180,12 +186,12 @@
     .stat-number {
       font-size: 32px;
       font-weight: 900;
-      color: #FFD700;
+      color: var(--gold);
     }
 
     .stat-label {
       font-size: 14px;
-      color: #777;
+      color: var(--text-faint);
       margin-top: 4px;
     }
 
@@ -210,7 +216,7 @@
     .section-subtitle {
       text-align: center;
       font-size: 16px;
-      color: #777;
+      color: var(--text-faint);
       margin-bottom: 48px;
     }
 
@@ -225,7 +231,7 @@
       border-radius: 20px;
       overflow: hidden;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
-                  0 0 40px rgba(255, 215, 0, 0.08);
+                  0 0 40px rgba(251, 172, 27, 0.08);
       position: relative;
       aspect-ratio: 9/16;
     }
@@ -285,7 +291,7 @@
 
     .feature-card:hover {
       transform: translateY(-4px);
-      border-color: rgba(255, 215, 0, 0.3);
+      border-color: rgba(251, 172, 27, 0.3);
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
     }
 
@@ -303,7 +309,7 @@
 
     .feature-card p {
       font-size: 14px;
-      color: #999;
+      color: var(--text-muted);
       line-height: 1.6;
     }
 
@@ -338,7 +344,7 @@
       transform: translateX(-50%);
       width: 32px;
       height: 32px;
-      background: linear-gradient(135deg, #FFD700, #FFA500);
+      background: linear-gradient(135deg, var(--gold-soft), var(--gold));
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -357,7 +363,7 @@
 
     .step-card p {
       font-size: 13px;
-      color: #999;
+      color: var(--text-muted);
       line-height: 1.5;
     }
 
@@ -413,21 +419,21 @@
     }
 
     .review-stars {
-      color: #FFD700;
+      color: var(--gold);
       font-size: 16px;
       margin-bottom: 8px;
     }
 
     .review-text {
       font-size: 14px;
-      color: #CCC;
+      color: var(--text);
       line-height: 1.6;
       margin-bottom: 12px;
     }
 
     .review-author {
       font-size: 13px;
-      color: #666;
+      color: var(--text-faint);
     }
 
     /* ===== CTA ===== */
@@ -444,7 +450,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.06) 0%, transparent 60%);
+      background: radial-gradient(ellipse at center, rgba(251, 172, 27, 0.06) 0%, transparent 60%);
     }
 
     .cta-section h2 {
@@ -457,7 +463,7 @@
 
     .cta-section p {
       font-size: 16px;
-      color: #999;
+      color: var(--text-muted);
       margin-bottom: 32px;
       position: relative;
     }
@@ -486,17 +492,22 @@
     }
 
     .footer-links a {
-      color: #666;
+      color: var(--text-faint);
       text-decoration: none;
       font-size: 13px;
       transition: color 0.2s;
+      /* 탭 타깃 44px 확보 — 링크 높이가 19px 라 손가락으로 못 누른다 */
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 4px;
     }
 
-    .footer-links a:hover { color: #FFD700; }
+    .footer-links a:hover { color: var(--gold); }
 
     .footer-copyright {
       font-size: 12px;
-      color: #444;
+      color: var(--text-faint);
     }
 
     /* ===== PARTICLES ===== */
@@ -504,7 +515,7 @@
       position: fixed;
       width: 3px;
       height: 3px;
-      background: #FFD700;
+      background: var(--gold);
       border-radius: 50%;
       opacity: 0;
       pointer-events: none;
