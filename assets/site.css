@@ -1,0 +1,417 @@
+/* ============================================================================
+   gold-step.kr — 공용 스타일시트
+   동글컴퍼니(DonggeulCompany) 퍼블리셔 사이트 · 고객센터 · 약관 공통.
+
+   ⚠️ 이 파일은 사이트 전체가 공유한다. 한 곳을 고치면 모든 페이지가 바뀐다.
+   ⚠️ 색은 전부 :root 토큰으로만 쓴다. 페이지에 색을 직접 박지 말 것.
+   ⚠️ 본문/보조 텍스트 색은 배경 대비 WCAG AA(4.5:1) 를 통과하도록 고른 값이다.
+      바꿀 때는 반드시 대비를 다시 재라.
+   · 캐시드릴 랜딩(/cashdrill/)은 자체 <style> 을 그대로 쓰되 이 파일의 토큰만
+     가져다 쓴다. 그래서 여기서 태그 셀렉터로 레이아웃을 건드리지 않는다.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- tokens */
+:root {
+  /* 배경 · 표면 */
+  --ink:          #0B0E14;   /* 페이지 배경 */
+  --ink-raised:   #131A25;   /* 카드 */
+  --ink-sunken:   #0F141D;   /* 코드 · 입력 */
+  --line:         #27313F;   /* 경계선 */
+  --line-strong:  #3A4657;
+
+  /* 글자 (대비는 --ink 기준, 아래 '대비' 주석 참고) */
+  --text:         #E9EDF4;   /* 본문       16.45:1 */
+  --text-muted:   #A7B2C4;   /* 보조        9.02:1 */
+  --text-faint:   #8A94A6;   /* 캡션        6.32:1 (카드 위 5.71:1) */
+
+  /* 브랜드 골드 */
+  --gold:         #FBAC1B;   /* 강조 · 링크 10.14:1 on --ink */
+  --gold-soft:    #FFC964;   /* 호버       12.69:1 on --ink */
+  --gold-deep:    #8F6A00;   /* 밝은 배경 위 글자용 (인쇄 · 버튼 대비) */
+  --gold-wash:    rgba(251, 172, 27, 0.12);
+  --gold-edge:    rgba(251, 172, 27, 0.32);
+
+  /* 상태 */
+  --warn-bg:      #2A1C02;
+  --warn-line:    #6B5312;
+  --warn-text:    #FFC964;   /* 10.90:1 on --warn-bg */
+  --tip-bg:       #0C2030;
+  --tip-line:     #1B4E6E;
+  --tip-text:     #92D2F5;   /* 10.09:1 on --tip-bg */
+
+  --focus:        #6FC3FF;
+
+  /* 타이포 스케일 (1.2 단조 3도, 본문 17px) */
+  --fs-micro: 0.8125rem;  /* 13 */
+  --fs-sm:    0.9375rem;  /* 15 */
+  --fs-base:  1.0625rem;  /* 17 */
+  --fs-md:    1.1875rem;  /* 19 */
+  --fs-lg:    1.375rem;   /* 22 */
+  --fs-xl:    1.75rem;    /* 28 */
+  --fs-2xl:   clamp(2rem, 1.55rem + 2.2vw, 2.75rem);
+
+  --lh-tight: 1.3;
+  --lh-body:  1.75;
+
+  /* 간격 (4px 배수) */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+
+  --r-sm: 8px; --r-md: 12px; --r-lg: 18px; --r-full: 999px;
+
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --gutter: 20px;          /* 모바일 좌우 여백(≥16px 요구치 충족) */
+  --measure: 760px;        /* 본문 최대 폭 */
+  --wide: 1040px;          /* 그리드 최대 폭 */
+  --tap: 44px;             /* 최소 탭 타깃 */
+}
+
+/* ------------------------------------------------------------------ base */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body.site {
+  margin: 0;
+  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+               'Malgun Gothic', sans-serif;
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+  color: var(--text);
+  background: var(--ink);
+  overflow-x: hidden;
+  /* 상단 금빛 훈김 — 캐시드릴 랜딩과 같은 톤을 유지한다 */
+  background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(251,172,27,0.10), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* ⚠️ 아래 기본 요소 규칙은 전부 :where() 안에 둔다. 특이도가 0 이 되어
+   컴포넌트 클래스(.btn, .doc h2, .hero-lede …)가 언제나 이긴다.
+   그냥 `body.site a` 로 쓰면 (0,1,2) 라서 .btn--primary(0,1,0) 를 덮어
+   금색 버튼에 금색 글씨가 된다 — 실제로 그렇게 났던 버그다. */
+:where(body.site img) { max-width: 100%; height: auto; display: block; }
+
+:where(body.site a) { color: var(--gold); text-decoration: none; }
+:where(body.site a:hover) { color: var(--gold-soft); text-decoration: underline; }
+
+:where(body.site p) { margin: 0 0 var(--s3); }
+:where(body.site h1, body.site h2, body.site h3, body.site h4) {
+  margin: 0; line-height: var(--lh-tight); font-weight: 700; color: var(--text);
+  word-break: keep-all;              /* 한글 단어 중간에서 끊지 않는다 */
+}
+
+:where(body.site code, body.site kbd) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--ink-sunken);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+/* 키보드 포커스 — 전 페이지 공통(캐시드릴 랜딩 포함). 마우스 클릭에는 뜨지 않는다. */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 건너뛰기 링크 */
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 99;
+  background: var(--gold); color: #17120A; font-weight: 700;
+  padding: var(--s3) var(--s4); border-radius: 0 0 var(--r-sm) 0;
+}
+.skip:focus { left: 0; }
+
+/* 화면에는 안 보이지만 스크린리더는 읽는 라벨 */
+.vh {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- layout */
+.wrap { width: 100%; max-width: var(--measure); margin: 0 auto; padding: 0 var(--gutter); }
+.wrap--wide { max-width: var(--wide); }
+
+.section { padding: var(--s7) 0; }
+.section + .section { padding-top: 0; }
+
+.section-head { margin-bottom: var(--s5); }
+.section-title {
+  font-size: var(--fs-lg);
+  display: flex; align-items: center; gap: var(--s3);
+}
+.section-title .ico { font-size: 1.15em; line-height: 1; }
+.section-note { color: var(--text-muted); font-size: var(--fs-sm); margin-top: var(--s2); }
+
+.divider { border: 0; border-top: 1px solid var(--line); margin: var(--s7) 0; }
+
+/* ---------------------------------------------------------------- header */
+.topbar {
+  border-bottom: 1px solid var(--line);
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: saturate(160%) blur(8px);
+  position: sticky; top: 0; z-index: 20;
+}
+.topbar-inner {
+  display: flex; align-items: center; gap: var(--s4);
+  flex-wrap: wrap;
+  min-height: 60px; padding-top: var(--s2); padding-bottom: var(--s2);
+}
+.brand { display: inline-flex; align-items: center; gap: var(--s3); min-height: var(--tap); font-weight: 700; color: var(--text); }
+.brand:hover { color: var(--text); text-decoration: none; }
+.brand img { width: 32px; height: 32px; border-radius: 9px; }
+.brand span { font-size: var(--fs-md); letter-spacing: -0.01em; }
+
+.topnav { display: flex; gap: var(--s1); flex-wrap: wrap; margin-left: auto; }
+.topnav a {
+  display: inline-flex; align-items: center;
+  min-height: var(--tap); padding: 0 var(--s3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm); color: var(--text-muted);
+}
+.topnav a:hover { color: var(--gold); background: var(--gold-wash); text-decoration: none; }
+.topnav a[aria-current="page"] { color: var(--gold); background: var(--gold-wash); }
+
+/* ------------------------------------------------------------------ hero */
+.hero { padding: var(--s7) 0 var(--s6); }
+.hero-row { display: flex; align-items: center; gap: var(--s5); flex-wrap: wrap; }
+.hero-icon {
+  width: 88px; height: 88px; border-radius: 22px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  flex: none;
+}
+.hero-text { min-width: 0; flex: 1 1 260px; }
+.eyebrow {
+  display: inline-block;
+  font-size: var(--fs-sm); font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;   /* 한글엔 효과 없음 — 영문 라벨용 */
+  color: var(--gold);
+  background: var(--gold-wash); border: 1px solid var(--gold-edge);
+  border-radius: var(--r-full); padding: 4px 12px;
+  margin-bottom: var(--s3);
+}
+.hero h1 { font-size: var(--fs-xl); letter-spacing: -0.02em; }
+.hero-lede { color: var(--text-muted); margin: var(--s3) 0 0; }
+.hero-meta { margin-top: var(--s3); font-size: var(--fs-sm); color: var(--text-muted); }
+.hero-meta strong { color: var(--text-muted); font-weight: 700; }
+
+/* --------------------------------------------------------------- buttons */
+.actions { display: flex; flex-wrap: wrap; gap: var(--s3); margin-top: var(--s5); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--tap); padding: var(--s3) var(--s5);
+  border-radius: var(--r-md); border: 1px solid var(--line-strong);
+  background: var(--ink-raised); color: var(--text);
+  font: inherit; font-size: var(--fs-sm); font-weight: 700;
+  text-decoration: none; cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.btn:hover { background: #1B2432; border-color: var(--gold-edge); color: var(--text); text-decoration: none; }
+.btn:active { transform: translateY(1px); }
+.btn--primary {
+  background: var(--gold); border-color: var(--gold);
+  color: #17120A;                 /* 골드 위 먹색 — 9.77:1 */
+}
+.btn--primary:hover { background: var(--gold-soft); border-color: var(--gold-soft); color: #17120A; }
+.btn .ico { font-size: 1.05em; }
+
+/* ----------------------------------------------------------------- cards */
+.card {
+  background: var(--ink-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--s5);
+}
+.card + .card { margin-top: var(--s4); }
+.card h2 { font-size: var(--fs-md); margin-bottom: var(--s3); }
+.card h2 .ico { margin-right: var(--s2); }
+.card--accent { border-left: 3px solid var(--gold); }
+.card p:last-child { margin-bottom: 0; }
+
+.grid { display: grid; gap: var(--s4); }
+.grid--stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.grid--apps  { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+/* 넓은 화면에선 2×2 로 고정한다 — 3+1 로 떨어지면 마지막 카드만 외따로 남는다 */
+@media (min-width: 860px) { .grid--apps { grid-template-columns: repeat(2, 1fr); } }
+
+.stat {
+  background: var(--ink-raised); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: var(--s4);
+}
+.stat b { display: block; color: var(--gold); font-size: var(--fs-lg); line-height: 1.2; }
+.stat span { display: block; color: var(--text-muted); font-size: var(--fs-micro); margin-top: var(--s1); }
+
+/* 앱 카드 */
+.app-card {
+  display: flex; align-items: center; gap: var(--s4);
+  background: var(--ink-raised); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: var(--s4);
+  color: var(--text);
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+.app-card:hover {
+  border-color: var(--gold-edge); background: #172030;
+  color: var(--text); text-decoration: none; transform: translateY(-2px);
+}
+.app-card img { width: 56px; height: 56px; border-radius: 14px; flex: none; }
+.app-card-text { flex: 1 1 auto; min-width: 0; }
+/* 아이콘 파일이 없는 앱(골드스텝)용 머릿글자 타일 — 남의 앱 아이콘을 빌려 쓰지 않는다 */
+.app-card .mono {
+  flex: none; width: 56px; height: 56px; border-radius: 14px;
+  display: grid; place-items: center;
+  background: var(--gold-wash); border: 1px solid var(--gold-edge);
+  color: var(--gold); font-weight: 700; font-size: var(--fs-md); letter-spacing: 0.02em;
+}
+.app-card strong { display: block; font-size: var(--fs-base); }
+.app-card em { display: block; font-style: normal; color: var(--text-muted); font-size: var(--fs-sm); margin-top: 2px; }
+.app-card .arrow { margin-left: auto; color: var(--text-faint); font-size: var(--fs-md); }
+
+/* ------------------------------------------------------- 정의 목록 · 표 */
+.dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--s3) var(--s5); margin: 0; font-size: var(--fs-sm); }
+.dl dt { color: var(--text-faint); }
+.dl dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.tbl { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+table.tbl th, table.tbl td { border: 1px solid var(--line); padding: var(--s3) var(--s4); text-align: left; vertical-align: top; }
+table.tbl th { background: var(--ink-sunken); color: var(--gold); font-weight: 700; }
+table.tbl td { color: var(--text-muted); }
+
+/* ------------------------------------------------------- 주의 · 도움말 */
+.note { border-radius: var(--r-md); padding: var(--s3) var(--s4); margin-top: var(--s3); font-size: var(--fs-sm); }
+.note--warn { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text); }
+.note--tip  { background: var(--tip-bg);  border: 1px solid var(--tip-line);  color: var(--tip-text); }
+.note strong { color: inherit; }
+.note a { color: inherit; text-decoration: underline; }
+
+/* ------------------------------------------------------------- 아코디언 */
+.faq-tools { margin-bottom: var(--s5); }
+.faq-search { position: relative; }
+.faq-search input {
+  width: 100%; min-height: var(--tap);
+  padding: var(--s3) var(--s4) var(--s3) 42px;
+  font: inherit; font-size: var(--fs-sm);
+  color: var(--text); background: var(--ink-sunken);
+  border: 1px solid var(--line-strong); border-radius: var(--r-md);
+}
+.faq-search input::placeholder { color: var(--text-faint); }
+.faq-search .ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
+.faq-count { font-size: var(--fs-micro); color: var(--text-faint); margin-top: var(--s2); min-height: 1.2em; }
+
+.faq { border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: var(--ink-raised); }
+.faq details + details { border-top: 1px solid var(--line); }
+.faq summary {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s4); min-height: var(--tap);
+  cursor: pointer; list-style: none;
+  font-weight: 700; color: var(--text);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary:hover { background: #172030; }
+.faq summary::after {
+  content: '';
+  margin-left: auto; flex: none;
+  width: 10px; height: 10px; margin-top: 6px;
+  border-right: 2px solid var(--gold); border-bottom: 2px solid var(--gold);
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.faq details[open] > summary::after { transform: rotate(-135deg); }
+.faq details[open] > summary { color: var(--gold); }
+.faq .answer { padding: 0 var(--s4) var(--s4); color: var(--text-muted); }
+.faq .answer > :last-child { margin-bottom: 0; }
+.faq .answer strong { color: var(--text); }
+.faq .answer ul { padding-left: var(--s5); margin: var(--s2) 0 var(--s3); }
+.faq .answer li { margin-bottom: var(--s2); }
+
+/* 검색어로 걸러낼 때 — JS 가 꺼져 있으면 아무것도 숨지 않는다 */
+.faq [hidden] { display: none; }
+.faq-empty { color: var(--text-muted); font-size: var(--fs-sm); padding: var(--s5); text-align: center; }
+
+/* --------------------------------------------------------- 약관 · 방침 */
+.doc { padding: var(--s6) 0 var(--s7); }
+.doc h1 { font-size: var(--fs-xl); margin-bottom: var(--s2); }
+.doc .doc-sub { color: var(--text-muted); font-size: var(--fs-sm); margin-bottom: var(--s6); }
+.doc h2 {
+  font-size: var(--fs-md); color: var(--gold);
+  margin: var(--s7) 0 var(--s4);
+  padding-bottom: var(--s2); border-bottom: 1px solid var(--line);
+}
+.doc h3 { font-size: var(--fs-base); margin: var(--s5) 0 var(--s2); }
+.doc p, .doc li { color: var(--text-muted); }
+.doc ul, .doc ol { padding-left: var(--s5); margin: 0 0 var(--s4); }
+.doc li { margin-bottom: var(--s2); }
+.doc strong { color: var(--text); }
+.doc table { border-collapse: collapse; width: 100%; margin: var(--s4) 0; font-size: var(--fs-sm); }
+.doc th, .doc td { border: 1px solid var(--line); padding: var(--s3) var(--s4); text-align: left; vertical-align: top; color: var(--text-muted); }
+.doc th { background: var(--ink-sunken); color: var(--gold); }
+.doc .muted { color: var(--text-faint); font-size: var(--fs-sm); }
+.back {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  min-height: var(--tap); font-size: var(--fs-sm); color: var(--text-muted);
+}
+.back:hover { color: var(--gold); }
+
+/* ---------------------------------------------------------------- footer */
+.site-footer {
+  margin-top: var(--s8);
+  border-top: 1px solid var(--line);
+  padding: var(--s6) 0 var(--s7);
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+.footer-apps { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-bottom: var(--s4); }
+.footer-apps a, .footer-legal a { color: var(--text-muted); }
+.footer-apps a:hover, .footer-legal a:hover { color: var(--gold); }
+.footer-legal { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-bottom: var(--s4); }
+.site-footer p { margin: 0 0 var(--s2); }
+.site-footer .biz-line { color: var(--text-faint); font-size: var(--fs-micro); line-height: 1.7; }
+
+/* 링크 목록의 탭 타깃 확보 — 독립 링크는 44px 를 지킨다(본문 속 인라인 링크는 예외) */
+.footer-apps a, .footer-legal a, .footer-apps span, .footer-legal span {
+  display: inline-flex; align-items: center; min-height: var(--tap);
+}
+
+/* ------------------------------------------------------------ 반응형 */
+@media (min-width: 720px) {
+  :root { --gutter: 32px; }
+  .hero-icon { width: 104px; height: 104px; }
+  .hero h1 { font-size: var(--fs-2xl); }
+}
+
+@media (max-width: 480px) {
+  .dl { grid-template-columns: 1fr; gap: var(--s1) 0; }
+  .dl dd { margin-bottom: var(--s3); }
+  .actions .btn { flex: 1 1 100%; }   /* 한 손 조작 — 버튼을 꽉 채운다 */
+}
+
+/* ------------------------------------------------------- 모션 · 인쇄 */
+@media (prefers-reduced-motion: reduce) {
+  /* 캐시드릴 랜딩(body 에 .site 없음)까지 걸리도록 일부러 전역이다 */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 약관·방침은 인쇄·저장될 일이 있다. 밝은 배경에서는 골드가 읽히지 않으므로
+   --gold-deep(#8F6A00, 흰 배경 대비 4.97:1) 로 떨군다. */
+@media print {
+  body.site { background: #FFF; color: #111; background-image: none; }
+  body.site a { color: #8F6A00; }
+  .topbar, .skip, .faq-tools, .actions, .site-footer .footer-apps { display: none !important; }
+  .doc h1, .doc h2, .doc h3 { color: var(--gold-deep); }
+  .doc p, .doc li, .doc td, .doc th { color: #222; }
+  .doc th { background: #FDFBF6; }
+  .doc th, .doc td { border-color: #CCC; }
+  .faq details { break-inside: avoid; }
+  .faq details:not([open]) > .answer { display: block; }  /* 인쇄 시 답변을 모두 편다 */
+}
