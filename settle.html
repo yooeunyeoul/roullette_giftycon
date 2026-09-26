@@ -7,7 +7,8 @@
 <title>출금 정산</title>
 <!--
   출금 정산 콘솔 (2026-09-23) — 캐시드릴 · 돈캐드릴 공용. 2026-09-26 캐시파이(페이팔) 탭 추가.
-  · 캐시파이는 페이팔이다: 이메일 복사 → 페이팔 앱에서 USD 송금 → 송금 완료. 차단 계정은 서버가 완료를 막는다.
+  · 캐시파이 탭은 두 종류를 같이 보여준다(9/26): 원화 계좌이체(한국 유저) + 페이팔(해외, USD).
+    원화 카드는 캐시드릴·돈캐드릴과 같은 흐름, 페이팔 카드는 이메일 복사 → 페이팔 앱 송금 → 송금 완료.
   · 서버에서 대기 목록을 직접 불러오고(붙여넣기·QR 불필요), 카드에서 완료/실패를 누르면 그 자리에서 서버 상태가 바뀐다.
   · 실제 송금은 오너가 카카오뱅크(사업자통장)에서 한다 — 카드 탭 = 계좌번호 복사, 금액 탭 = 금액 복사.
   · 키는 이 폰 브라우저(localStorage)에만 저장. 정산 전용 키(SETTLEMENT_API_KEY) 권장 — 출금 처리 외엔 아무것도 못 한다.
@@ -137,25 +138,46 @@
       },
       reject(key, id) { return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST'); },
     },
-    // 캐시파이 = 페이팔(USD). 금액은 **센트**로 온다(amountUsd 500 = $5.00).
+    // 캐시파이 = 원화 계좌이체(한국) + 페이팔(해외 USD, 금액은 **센트** — amountUsd 500 = $5.00).
     //   같은 백엔드(reward-factory)라 키도 돈캐드릴과 같다 — 따로 저장 안 했으면 돈캐드릴 키를 쓴다.
+    //   ⚠️ 원화 건은 돈캐드릴 탭이 appId 로 걸러 내서 어디에도 안 보였다(9/26 발견: 8/28 승인건부터 30건 적체).
     cashfi: {
       label: '캐시파이',
-      kind: 'paypal',
+      kind: 'mixed',
       base: 'https://reward-factory-backend.fly.dev',
       fee: 0,
       appId: 'com.rewardfactory.cashfi',
       keyFallback: 'gold',
       async list(key) {
-        const r = await api(this.base + '/admin/paypal?appId=' + encodeURIComponent(this.appId) + '&status=PENDING', key);
-        // 금액순으로 묶는다 — 같은 금액을 연달아 보내면 금액 입력을 한 번만 확인하면 된다.
-        return (r.withdrawals || []).map(w => ({
-          id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
+        const [pp, a, b] = await Promise.all([
+          api(this.base + '/admin/paypal?appId=' + encodeURIComponent(this.appId) + '&status=PENDING', key),
+          api(this.base + '/admin/withdrawals?status=requested', key),
+          api(this.base + '/admin/withdrawals?status=approved', key),
+        ]);
+        // 원화: 오래된 순(8월 승인건이 맨 위). 페이팔: 금액순 — 같은 금액을 연달아 보내면 입력 확인이 한 번이다.
+        const bank = [...(a.withdrawals || []), ...(b.withdrawals || [])]
+          .filter(w => w.appId === this.appId && w.method === 'cash')
+          .map(w => ({
+            kind: 'bank', id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
+            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+          }))
+          .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
+        const paypal = (pp.withdrawals || []).map(w => ({
+          kind: 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
           createdAt: w.createdAt, status: w.status,
         })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
+        return [...bank, ...paypal];
       },
-      complete(key, id) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/mark-paid', key, 'POST', { appId: this.appId, note: '정산 페이지' }); },
-      reject(key, id, item, reason) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reason: reason }); },
+      async complete(key, id, item) {
+        if (item.kind === 'paypal') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/mark-paid', key, 'POST', { appId: this.appId, note: '정산 페이지' });
+        // 원화: 돈캐드릴과 같은 상태 기계 requested → approved → paid.
+        if (item.status === 'requested') await api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/approve', key, 'POST');
+        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/paid', key, 'POST');
+      },
+      reject(key, id, item, reason) {
+        if (item.kind === 'paypal') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reason: reason });
+        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST');
+      },
     },
   };
 
@@ -201,8 +223,14 @@
     let p = 0, f = 0, d = 0;
     items.forEach(i => { if (i.ui === 'pending') p++; else if (i.ui === 'fail') f++; else d++; });
     $('nPending').textContent = p; $('nFail').textContent = f; $('nDone').textContent = d;
-    let sum = 0; items.forEach(i => { if (i.ui === 'pending' && i.cents != null && !i.blocked) sum += i.cents; });
-    $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건' + (APPS[app].kind === 'paypal' ? ' · 합계 ' + usd(sum) : '');
+    let sum = 0, krw = 0, nb = 0, np = 0;
+    items.forEach(i => {
+      if (i.ui !== 'pending') return;
+      if (i.kind === 'paypal') { np++; if (!i.blocked) sum += i.cents; }
+      else if (i.kind === 'bank') { nb++; krw += i.amount; }
+    });
+    $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건' +
+      (APPS[app].kind === 'mixed' ? ' · 원화 ' + nb + '건 ' + won(krw) + ' · 페이팔 ' + np + '건 ' + usd(sum) : '');
   }
 
   function paypalCard(item) {
@@ -234,7 +262,7 @@
 
   function card(item) {
     const cfg = APPS[app];
-    if (cfg.kind === 'paypal') return paypalCard(item);
+    if (item.kind === 'paypal') return paypalCard(item);
     const send = Math.max(0, item.amount - cfg.fee);
     const c = el('div', 'card');
     c.dataset.id = item.id;
@@ -269,7 +297,7 @@
   async function act(item, kind, cardEl) {
     const cfg = APPS[app];
     let reason = null;
-    if (cfg.kind === 'paypal') {
+    if (item.kind === 'paypal') {
       if (kind === 'complete') {
         if (!confirm(usd(item.cents) + ' → ' + item.email + '\n페이팔에서 송금을 마쳤나요?\n(되돌릴 수 없음)')) return;
       } else {
@@ -311,7 +339,17 @@
       items.clear();
       const pl = $('pendingList'); pl.replaceChildren();
       $('failList').replaceChildren(); $('doneList').replaceChildren();
-      list.forEach(it => { it.ui = 'pending'; items.set(it.id, it); pl.appendChild(card(it)); });
+      let lastKind = null;
+      list.forEach(it => {
+        it.ui = 'pending'; items.set(it.id, it);
+        // 두 종류가 섞이는 탭(캐시파이)은 묶음 제목을 단다 — 원화와 달러 카드를 헷갈리면 안 된다.
+        if (APPS[app].kind === 'mixed' && it.kind !== lastKind) {
+          const n = list.filter(x => x.kind === it.kind).length;
+          pl.appendChild(el('div', 'note', (it.kind === 'bank' ? '🏦 원화 계좌이체 ' : '💵 페이팔(USD) ') + n + '건'));
+          lastKind = it.kind;
+        }
+        pl.appendChild(card(it));
+      });
       if (!list.length) pl.appendChild(el('div', 'empty', '대기 건이 없습니다 🎉'));
       counts();
       showTab('pending');
@@ -331,8 +369,8 @@
     app = a; localStorage.setItem('settle.app', a);
     document.querySelectorAll('#appSeg button').forEach(b => b.classList.toggle('on', b.dataset.app === a));
     $('keyRow').classList.toggle('hidden', !!keyOf(a));
-    $('hint').classList.toggle('hidden', APPS[a].kind === 'paypal');
-    $('hintPaypal').classList.toggle('hidden', APPS[a].kind !== 'paypal');
+    $('hint').classList.toggle('hidden', false);
+    $('hintPaypal').classList.toggle('hidden', APPS[a].kind !== 'mixed');
     $('keyInput').value = '';
     items.clear(); counts();
     $('pendingList').replaceChildren(el('div', 'empty', APPS[a].label + ' — 불러오기를 눌러 주세요'));
