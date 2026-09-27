@@ -94,7 +94,7 @@
 
   // ── 앱별 설정 ─────────────────────────────────────────────────────────
   //   fee: 유저 신청 금액에서 오너가 떼고 보내는 이체 수수료(캐시드릴은 500원 떼고 800캐시 페이백).
-  //   돈캐드릴은 수수료 규정이 없어 0 — 다르면 여기 숫자만 바꾼다.
+  //   ★ 2026-09-27 오너: 원화 이체는 **세 앱 모두 500원 수수료**를 떼고 보낸다.
   const APPS = {
     cashdrill: {
       label: '캐시드릴',
@@ -115,7 +115,7 @@
     gold: {
       label: '돈캐드릴',
       base: 'https://reward-factory-backend.fly.dev',
-      fee: 0,
+      fee: 500,   // 이체 수수료 500원 — 모든 원화 이체 공통(오너 2026-09-27). 캐시드릴과 같다.
       appId: 'com.rewardfactory.gold',
       async list(key) {
         // requested(신청) + approved(승인만 되고 미지급) 둘 다 "보낼 것". 캐시파이·기프티콘 건은 뺀다.
@@ -145,7 +145,7 @@
       label: '캐시파이',
       kind: 'mixed',
       base: 'https://reward-factory-backend.fly.dev',
-      fee: 0,
+      fee: 500,   // 이체 수수료 500원 — 모든 원화 이체 공통(오너 2026-09-27). 캐시드릴과 같다.
       appId: 'com.rewardfactory.cashfi',
       keyFallback: 'gold',
       async list(key) {
@@ -227,7 +227,7 @@
     items.forEach(i => {
       if (i.ui !== 'pending') return;
       if (i.kind === 'paypal') { np++; if (!i.blocked) sum += i.cents; }
-      else if (i.kind === 'bank') { nb++; krw += i.amount; }
+      else if (i.kind === 'bank') { nb++; krw += Math.max(0, i.amount - APPS[app].fee); } // 실제 보낼 금액(수수료 차감) 합계
     });
     $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건' +
       (APPS[app].kind === 'mixed' ? ' · 원화 ' + nb + '건 ' + won(krw) + ' · 페이팔 ' + np + '건 ' + usd(sum) : '');
