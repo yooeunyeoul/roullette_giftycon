@@ -7,6 +7,7 @@
 <title>출금 정산</title>
 <!--
   출금 정산 콘솔 (2026-09-23) — 캐시드릴 · 돈캐드릴 공용. 2026-09-26 캐시파이(페이팔) 탭 추가.
+  2026-10-09 캐시스텝 탭 추가 — 캐시파이와 같은 백엔드·같은 흐름(원화 + 페이팔)이라 같은 설정 함수(rfMixed)를 쓴다.
   · 캐시파이 탭은 두 종류를 같이 보여준다(9/26): 원화 계좌이체(한국 유저) + 페이팔(해외, USD).
     원화 카드는 캐시드릴·돈캐드릴과 같은 흐름, 페이팔 카드는 이메일 복사 → 페이팔 앱 송금 → 송금 완료.
   · 서버에서 대기 목록을 직접 불러오고(붙여넣기·QR 불필요), 카드에서 완료/실패를 누르면 그 자리에서 서버 상태가 바뀐다.
@@ -20,7 +21,7 @@
   body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system, "Pretendard", "Noto Sans KR", sans-serif; padding: env(safe-area-inset-top,0) 12px calc(24px + env(safe-area-inset-bottom,0)); }
   h1 { font-size:18px; margin:14px 0 10px; display:flex; align-items:center; gap:8px; }
   .seg { display:flex; gap:6px; margin-bottom:10px; }
-  .seg button { flex:1; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--muted); font-size:15px; font-weight:700; }
+  .seg button { flex:1; min-width:0; padding:12px 4px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--muted); font-size:14px; font-weight:700; white-space:nowrap; }
   .seg button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; }
   input[type=password], input[type=text] { flex:1; padding:11px 12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--text); font-size:15px; }
@@ -67,6 +68,7 @@
     <button data-app="cashdrill" class="on">캐시드릴</button>
     <button data-app="gold">돈캐드릴</button>
     <button data-app="cashfi">캐시파이</button>
+    <button data-app="cashstep">캐시스텝</button>
   </div>
 
   <div class="row" id="keyRow">
@@ -96,6 +98,53 @@
   'use strict';
 
   // ── 앱별 설정 ─────────────────────────────────────────────────────────
+  // reward-factory 백엔드의 "원화 계좌이체(한국) + 페이팔(해외 USD, 금액은 **센트** — amountUsd 500 = $5.00)" 탭.
+  //   같은 백엔드라 키도 돈캐드릴과 같다 — 따로 저장 안 했으면 돈캐드릴 키를 쓴다.
+  //   ⚠️ 원화 건은 appId 로 거른다. 예전엔 돈캐드릴 탭만 있어 캐시파이 원화가 어디에도 안 보였다(9/26 발견: 30건 적체).
+  function rfMixed(label, appId) {
+    return {
+      label: label,
+      kind: 'mixed',
+      base: 'https://reward-factory-backend.fly.dev',
+      fee: 500,   // 이체 수수료 500원 — 모든 원화 이체 공통(오너 2026-09-27).
+      appId: appId,
+      keyFallback: 'gold',
+      async list(key) {
+        const [pp, a, b] = await Promise.all([
+          api(this.base + '/admin/paypal?appId=' + encodeURIComponent(this.appId) + '&status=PENDING', key),
+          api(this.base + '/admin/withdrawals?status=requested', key),
+          api(this.base + '/admin/withdrawals?status=approved', key),
+        ]);
+        // 원화: 오래된 순. 페이팔: 금액순 — 같은 금액을 연달아 보내면 입력 확인이 한 번이다.
+        const bank = [...(a.withdrawals || []), ...(b.withdrawals || [])]
+          .filter(w => w.appId === this.appId && w.method === 'cash')
+          .map(w => ({
+            kind: 'bank', id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
+            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+          }))
+          .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
+        const paypal = (pp.withdrawals || []).map(w => ({
+          kind: w.holdReason ? 'paypal-held' : 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
+          holdReason: w.holdReason || '', createdAt: w.createdAt, status: w.status,
+        })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
+        // ★ 보류 건(2026-09-27)은 맨 아래 따로 — 위에서부터 쭉 보내도 보류 건에 닿기 전에 멈추게.
+        return [...bank, ...paypal.filter(x => x.kind === 'paypal'), ...paypal.filter(x => x.kind === 'paypal-held')];
+      },
+      async complete(key, id, item) {
+        if (item.kind === 'paypal') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/mark-paid', key, 'POST', { appId: this.appId, note: '정산 페이지' });
+        // 원화: 돈캐드릴과 같은 상태 기계 requested → approved → paid.
+        if (item.status === 'requested') await api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/approve', key, 'POST');
+        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/paid', key, 'POST');
+      },
+      hold(key, id, reason) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/hold', key, 'POST', { appId: this.appId, reason: reason }); },
+      unhold(key, id) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/unhold', key, 'POST', { appId: this.appId }); },
+      reject(key, id, item, reason) {
+        if (item.kind === 'paypal' || item.kind === 'paypal-held') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reason: reason });
+        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST');
+      },
+    };
+  }
+
   //   fee: 유저 신청 금액에서 오너가 떼고 보내는 이체 수수료(캐시드릴은 500원 떼고 800캐시 페이백).
   //   ★ 2026-09-27 오너: 원화 이체는 **세 앱 모두 500원 수수료**를 떼고 보낸다.
   const APPS = {
@@ -141,50 +190,9 @@
       },
       reject(key, id) { return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST'); },
     },
-    // 캐시파이 = 원화 계좌이체(한국) + 페이팔(해외 USD, 금액은 **센트** — amountUsd 500 = $5.00).
-    //   같은 백엔드(reward-factory)라 키도 돈캐드릴과 같다 — 따로 저장 안 했으면 돈캐드릴 키를 쓴다.
-    //   ⚠️ 원화 건은 돈캐드릴 탭이 appId 로 걸러 내서 어디에도 안 보였다(9/26 발견: 8/28 승인건부터 30건 적체).
-    cashfi: {
-      label: '캐시파이',
-      kind: 'mixed',
-      base: 'https://reward-factory-backend.fly.dev',
-      fee: 500,   // 이체 수수료 500원 — 모든 원화 이체 공통(오너 2026-09-27). 캐시드릴과 같다.
-      appId: 'com.rewardfactory.cashfi',
-      keyFallback: 'gold',
-      async list(key) {
-        const [pp, a, b] = await Promise.all([
-          api(this.base + '/admin/paypal?appId=' + encodeURIComponent(this.appId) + '&status=PENDING', key),
-          api(this.base + '/admin/withdrawals?status=requested', key),
-          api(this.base + '/admin/withdrawals?status=approved', key),
-        ]);
-        // 원화: 오래된 순(8월 승인건이 맨 위). 페이팔: 금액순 — 같은 금액을 연달아 보내면 입력 확인이 한 번이다.
-        const bank = [...(a.withdrawals || []), ...(b.withdrawals || [])]
-          .filter(w => w.appId === this.appId && w.method === 'cash')
-          .map(w => ({
-            kind: 'bank', id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
-            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
-          }))
-          .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
-        const paypal = (pp.withdrawals || []).map(w => ({
-          kind: w.holdReason ? 'paypal-held' : 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
-          holdReason: w.holdReason || '', createdAt: w.createdAt, status: w.status,
-        })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
-        // ★ 보류 건(2026-09-27)은 맨 아래 따로 — 위에서부터 쭉 보내도 보류 건에 닿기 전에 멈추게.
-        return [...bank, ...paypal.filter(x => x.kind === 'paypal'), ...paypal.filter(x => x.kind === 'paypal-held')];
-      },
-      async complete(key, id, item) {
-        if (item.kind === 'paypal') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/mark-paid', key, 'POST', { appId: this.appId, note: '정산 페이지' });
-        // 원화: 돈캐드릴과 같은 상태 기계 requested → approved → paid.
-        if (item.status === 'requested') await api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/approve', key, 'POST');
-        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/paid', key, 'POST');
-      },
-      hold(key, id, reason) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/hold', key, 'POST', { appId: this.appId, reason: reason }); },
-      unhold(key, id) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/unhold', key, 'POST', { appId: this.appId }); },
-      reject(key, id, item, reason) {
-        if (item.kind === 'paypal' || item.kind === 'paypal-held') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reason: reason });
-        return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST');
-      },
-    },
+    cashfi: rfMixed('캐시파이', 'com.rewardfactory.cashfi'),
+    // 캐시스텝(2026-10-09) — 오너가 폰에서 캐시스텝 원화 신청을 볼 곳이 없었다(10/8 첫 ₩2,000 신청).
+    cashstep: rfMixed('캐시스텝', 'com.rewardfactory.cashstep'),
   };
 
   let app = localStorage.getItem('settle.app') || 'cashdrill';
