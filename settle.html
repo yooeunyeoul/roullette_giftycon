@@ -14,6 +14,11 @@
   · 실제 송금은 오너가 카카오뱅크(사업자통장)에서 한다 — 카드 탭 = 계좌번호 복사, 금액 탭 = 금액 복사.
   · 키는 이 폰 브라우저(localStorage)에만 저장. 정산 전용 키(SETTLEMENT_API_KEY) 권장 — 출금 처리 외엔 아무것도 못 한다.
   · 유저 입력값(예금주 등)은 전부 textContent 로만 렌더링한다(XSS 방지 — 옛 페이지는 innerHTML 이었다).
+  2026-10-18 📱 에어타임 승인 모드 추가(reward-factory 백엔드 /admin/airtime — 캐시파이·캐시스텝·돈캐드릴·웨이크박스).
+  · 기존 출금 정산(원화·페이팔)과 **완전히 분리된** 별도 스크립트·별도 DOM 이다. 위 정산 코드는 건드리지 않았다.
+  · ⚠️ 에어타임 [승인] = 서버가 리로들리로 **실제 송금**한다(페이팔 '송금 완료'처럼 기록만이 아니다).
+    그래서 서버는 승인을 **ADMIN_API_KEY 로만** 받는다 — 정산 키면 403 settlement_key_cannot_send, 화면도 버튼을 끈다.
+  · 금액은 센트(amountUsd 500 = $5.00), 번호는 서버가 마스킹해서 준다(뒤 4자리만).
 -->
 <style>
   :root { --bg:#0f1115; --card:#181b22; --line:#262a33; --text:#e8eaf0; --muted:#8b93a3; --ok:#22c55e; --bad:#ef4444; --accent:#4f7cff; --amber:#f59e0b; }
@@ -59,11 +64,24 @@
   .card.held { opacity:.6; border-style:dashed; }
   .heldnote { display:inline-block; margin-top:6px; padding:4px 8px; border-radius:6px; background:rgba(245,158,11,.15); color:var(--amber); font-size:13px; font-weight:700; }
   .acts .hold { background:#6b5a1f; }
+  /* 📱 에어타임 승인(2026-10-18) */
+  #modeSeg button.on { background:#2a3550; color:#fff; border-color:#4f7cff; }
+  .air-bal { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:10px; font-size:14px; }
+  .air-bal b { font-size:18px; }
+  .air-res { margin-top:8px; padding:8px 10px; border-radius:8px; background:#20242d; font-size:13px; word-break:break-all; }
+  .air-res.ok { color:var(--ok); } .air-res.bad { color:var(--bad); } .air-res.wait { color:var(--amber); }
+  #airStatusTabs button { padding:9px 2px; font-size:12px; }
 </style>
 </head>
 <body>
   <h1>💸 출금 정산 <span id="count" style="color:var(--muted);font-size:13px;font-weight:500"></span></h1>
 
+  <div class="seg" id="modeSeg">
+    <button data-mode="settle" class="on">💸 출금 정산</button>
+    <button data-mode="air">📱 에어타임 승인</button>
+  </div>
+
+  <div id="settleMain">
   <div class="seg" id="appSeg">
     <button data-app="cashdrill" class="on">캐시드릴</button>
     <button data-app="gold">돈캐드릴</button>
@@ -90,6 +108,36 @@
   <div id="pendingList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
   <div id="failList" class="list hidden"></div>
   <div id="doneList" class="list hidden"></div>
+  </div>
+
+  <!-- 📱 에어타임 승인 (2026-10-18) — 파일 맨 아래 두 번째 스크립트만 이 영역을 다룬다. -->
+  <div id="airMain" class="hidden">
+    <div class="seg" id="airAppSeg">
+      <button data-air-app="com.rewardfactory.cashfi" class="on">캐시파이</button>
+      <button data-air-app="com.rewardfactory.cashstep">캐시스텝</button>
+      <button data-air-app="com.rewardfactory.gold">돈캐드릴</button>
+      <button data-air-app="com.rewardfactory.wakebox">웨이크박스</button>
+    </div>
+    <div class="row hidden" id="airKeyRow">
+      <input type="password" id="airKeyInput" placeholder="에어타임 키 — 송금하려면 어드민 키" autocomplete="off">
+      <button class="btn ghost" id="airKeySave">저장</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="airLoadBtn" style="flex:1">에어타임 불러오기</button>
+      <button class="btn ghost" id="airKeyEdit" title="키 변경">🔑</button>
+    </div>
+    <p class="note"><span class="warn">⚠️ [승인]을 누르면 리로들리로 <b>실제 송금</b>이 나갑니다(되돌릴 수 없음).</span> 보내면 안 되는 건은 <b>거절</b>(사유 필수, 캐시 환불). 자동 송금 상한을 넘은 건만 여기 옵니다.</p>
+    <p class="note warn hidden" id="airNoSend">🔒 지금 키는 정산 키라 승인(송금)이 막혀 있어요. 목록·거절만 됩니다. 송금하려면 🔑 에 어드민 키를 넣으세요.</p>
+    <div class="air-bal hidden" id="airBal"></div>
+    <div class="tabs" id="airStatusTabs">
+      <button data-air-status="PENDING" class="on">대기</button>
+      <button data-air-status="PROCESSING">처리중</button>
+      <button data-air-status="COMPLETED">완료</button>
+      <button data-air-status="FAILED">실패</button>
+      <button data-air-status="DENIED">거절</button>
+    </div>
+    <div id="airList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
+  </div>
 
   <div id="toast">복사 완료</div>
 
@@ -428,6 +476,179 @@
   $('loadBtn').onclick = load;
 
   setApp(app);
+})();
+</script>
+<script>
+// ── 📱 에어타임 승인 (2026-10-18) ───────────────────────────────────────────
+//   위 출금 정산 스크립트와 **독립**이다(공유 상태 없음). 같은 #toast 요소만 빌려 쓴다.
+//   서버: reward-factory 백엔드 GET /admin/airtime?appId=&status= · POST /:id/approve · POST /:id/reject
+//   ⚠️ approve = 리로들리 실송금. 서버가 ADMIN_API_KEY 만 받는다(정산 키 403) — 응답 canSend 로 버튼을 끈다.
+(function () {
+  'use strict';
+  const BASE = 'https://reward-factory-backend.fly.dev';
+  const NAMES = { 'com.rewardfactory.cashfi': '캐시파이', 'com.rewardfactory.cashstep': '캐시스텝', 'com.rewardfactory.gold': '돈캐드릴', 'com.rewardfactory.wakebox': '웨이크박스' };
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  const usd = (c) => '$' + (Number(c) / 100).toFixed(2);   // 금액은 센트
+  const when = (t) => t ? new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) { return null; } }
+  // 키: 에어타임 전용(어드민 키 권장) → 없으면 rf 정산 키(캐시파이·캐시스텝·돈캐드릴 순) — 그 키면 목록·거절만.
+  const airKey = () => ls('settle.key.air') || ls('settle.key.cashfi') || ls('settle.key.cashstep') || ls('settle.key.gold') || '';
+  let t;
+  function toast(msg) { const e = $('toast'); e.textContent = msg; e.classList.add('show'); clearTimeout(t); t = setTimeout(() => e.classList.remove('show'), 1400); }
+
+  let appId = ls('settle.air.app') || 'com.rewardfactory.cashfi';
+  if (!NAMES[appId]) appId = 'com.rewardfactory.cashfi';
+  let status = 'PENDING';
+  let canSend = false;
+
+  async function api(url, method, body) {
+    const res = await fetch(url, {
+      method: method || 'GET',
+      headers: Object.assign({ 'Authorization': 'Bearer ' + airKey() }, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    const code = data && (data.error?.message || data.error || data.message);
+    if (res.status === 401) throw new Error('키가 틀렸어요 (401)');
+    if (res.status === 503) throw new Error('서버에 키가 설정돼 있지 않아요 (503)');
+    if (res.status === 403 && code === 'settlement_key_cannot_send') throw new Error('정산 키로는 송금할 수 없어요 — 🔑 에 어드민 키를 넣어 주세요 (403)');
+    if (res.status === 409) throw new Error('이미 처리된 건이에요 — 목록을 다시 불러 주세요 (409)');
+    if (!res.ok) throw new Error(code || ('HTTP ' + res.status));
+    return data || {};
+  }
+
+  function resultBox(r) {
+    // 서버 status: COMPLETED / PROCESSING / FAILED (+ 리로들리 원문 reloadlyStatus, 거래번호)
+    const cls = r.status === 'COMPLETED' ? 'ok' : r.status === 'FAILED' ? 'bad' : 'wait';
+    const head = r.status === 'COMPLETED' ? '✅ 송금 성공' : r.status === 'FAILED' ? '❌ 송금 실패 — 캐시 환불됨' : '⏳ 처리중 — 결과 확인 대기(환불 안 함)';
+    const lines = [head, '리로들리: ' + (r.reloadlyStatus || '-') + ' · 거래번호 ' + (r.reloadlyTransactionId || '-')];
+    if (r.errorMessage) lines.push(r.errorMessage);
+    const box = el('div', 'air-res ' + cls);
+    lines.forEach((l, i) => { if (i) box.appendChild(document.createElement('br')); box.appendChild(document.createTextNode(l)); });
+    return box;
+  }
+
+  function airCard(w) {
+    const c = el('div', 'card');
+    const amt = el('div', 'amt', usd(w.amountUsd));
+    if (w.sentUsd != null && Number(w.sentUsd) !== Number(w.amountUsd)) amt.appendChild(el('small', null, '실송금 ' + usd(w.sentUsd)));
+    if (w.cashDeducted != null) amt.appendChild(el('small', null, Number(w.cashDeducted).toLocaleString('ko-KR') + '캐시'));
+    c.appendChild(amt);
+    c.appendChild(el('div', 'acct', (w.countryCode || '??') + ' · ' + (w.operatorName || '통신사 미확인')));
+    c.appendChild(el('div', 'holder', '📞 ' + (w.phone || '')));
+    c.appendChild(el('div', 'meta', '신청 ' + when(w.createdAt) + ' · 유저 ' + String(w.userId || '').slice(0, 8)
+      + (w.completedAt ? ' · 종결 ' + when(w.completedAt) : '')));
+    if (w.status !== 'PENDING' && (w.reloadlyStatus || w.reloadlyTransactionId || w.errorMessage)) c.appendChild(resultBox(w));
+    if (w.status === 'COMPLETED' && w.deliveredAmount != null) c.appendChild(el('div', 'meta', '도착 ' + w.deliveredAmount + ' ' + (w.deliveredCurrency || '')));
+
+    if (w.status === 'PENDING') {
+      const acts = el('div', 'acts');
+      const bf = el('button', 'fail', '거절');
+      const bo = el('button', 'ok', canSend ? '승인 (송금)' : '승인 🔒');
+      bo.disabled = !canSend;
+      bf.onclick = () => reject(w, c, [bf, bo]);
+      bo.onclick = () => approve(w, c, [bf, bo]);
+      acts.append(bf, bo);
+      c.appendChild(acts);
+    }
+    return c;
+  }
+
+  async function approve(w, c, btns) {
+    if (!canSend) { alert('정산 키로는 송금할 수 없어요. 🔑 에 어드민 키를 넣어 주세요.'); return; }
+    if (!confirm('리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
+    btns.forEach(b => b.disabled = true);
+    try {
+      const r = await api(BASE + '/admin/airtime/' + encodeURIComponent(w.id) + '/approve', 'POST', { appId: appId });
+      c.querySelector('.acts')?.remove();
+      c.appendChild(resultBox(r));
+      if (r.status !== 'COMPLETED') c.classList.add('fail'); else c.classList.add('done');
+      toast(r.status === 'COMPLETED' ? '송금 성공' : r.status === 'FAILED' ? '송금 실패 — 환불됨' : '처리중');
+    } catch (e) {
+      // ⚠️ 응답을 못 받았으면 송금됐는지 모른다. 다시 누르지 말고 '처리중' 탭으로 확인(서버도 두 번은 안 보낸다 — 409).
+      alert('승인 결과를 받지 못했어요: ' + e.message + '\n\n다시 누르지 말고 목록을 새로 불러 "처리중/완료" 탭에서 확인해 주세요.');
+      btns.forEach(b => b.disabled = false);
+      if (!canSend) btns[1].disabled = true;
+    }
+  }
+
+  async function reject(w, c, btns) {
+    const reason = prompt(usd(w.amountUsd) + ' · ' + (w.phone || '') + '\n거절 사유(필수 · 유저에게 안 보임). 캐시 ' + Number(w.cashDeducted || 0).toLocaleString('ko-KR') + '이 환불됩니다:', '');
+    if (reason === null) return;
+    if (!reason.trim()) { alert('거절 사유를 입력해 주세요'); return; }
+    btns.forEach(b => b.disabled = true);
+    try {
+      const r = await api(BASE + '/admin/airtime/' + encodeURIComponent(w.id) + '/reject', 'POST', { appId: appId, reason: reason.trim() });
+      c.querySelector('.acts')?.remove();
+      c.classList.add('fail');
+      c.appendChild(el('div', 'air-res bad', '거절됨 — 캐시 ' + Number(r.refunded || 0).toLocaleString('ko-KR') + ' 환불'));
+      toast('거절 + 환불');
+    } catch (e) {
+      alert('거절 실패: ' + e.message);
+      btns.forEach(b => b.disabled = false);
+      if (!canSend) btns[1].disabled = true;
+    }
+  }
+
+  async function load() {
+    if (!airKey()) { alert('먼저 키를 저장해 주세요'); $('airKeyRow').classList.remove('hidden'); return; }
+    const btn = $('airLoadBtn'); btn.disabled = true; btn.textContent = '불러오는 중…';
+    try {
+      const r = await api(BASE + '/admin/airtime?appId=' + encodeURIComponent(appId) + '&status=' + status);
+      canSend = r.canSend === true;
+      $('airNoSend').classList.toggle('hidden', canSend);
+      const list = r.withdrawals || [];
+      const bal = $('airBal'); bal.replaceChildren(); bal.classList.remove('hidden');
+      bal.appendChild(document.createTextNode('리로들리 지갑 '));
+      bal.appendChild(el('b', null, r.balanceUsd == null ? '조회 실패' : '$' + Number(r.balanceUsd).toFixed(2)));
+      if (status === 'PENDING') {
+        const sum = list.reduce((a, w) => a + Number(w.sentUsd ?? w.amountUsd ?? 0), 0);
+        bal.appendChild(document.createTextNode(' · 대기 ' + list.length + '건 ' + usd(sum)));
+        if (r.balanceUsd != null && sum / 100 > Number(r.balanceUsd)) bal.appendChild(el('div', 'warn', '⚠️ 대기 합계가 지갑 잔액보다 커요 — 충전 전엔 일부가 실패합니다'));
+      }
+      const pl = $('airList'); pl.replaceChildren();
+      list.forEach(w => pl.appendChild(airCard(w)));
+      if (!list.length) pl.appendChild(el('div', 'empty', NAMES[appId] + ' — ' + (status === 'PENDING' ? '대기 건이 없습니다 🎉' : '해당 건이 없습니다')));
+    } catch (e) {
+      alert('불러오기 실패: ' + e.message);
+    } finally { btn.disabled = false; btn.textContent = '에어타임 불러오기'; }
+  }
+
+  function setAirApp(a) {
+    appId = a; ls('settle.air.app', a);
+    document.querySelectorAll('#airAppSeg button').forEach(b => b.classList.toggle('on', b.dataset.airApp === a));
+    $('airList').replaceChildren(el('div', 'empty', NAMES[a] + ' — 불러오기를 눌러 주세요'));
+    $('airBal').classList.add('hidden');
+  }
+  function setStatus(s) {
+    status = s;
+    document.querySelectorAll('#airStatusTabs button').forEach(b => b.classList.toggle('on', b.dataset.airStatus === s));
+    if (airKey()) load();
+  }
+  function setMode(m) {
+    ls('settle.mode', m);
+    document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+    $('settleMain').classList.toggle('hidden', m === 'air');
+    $('airMain').classList.toggle('hidden', m !== 'air');
+    $('count').classList.toggle('hidden', m === 'air');
+  }
+
+  document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  document.querySelectorAll('#airAppSeg button').forEach(b => b.onclick = () => setAirApp(b.dataset.airApp));
+  document.querySelectorAll('#airStatusTabs button').forEach(b => b.onclick = () => setStatus(b.dataset.airStatus));
+  $('airKeySave').onclick = () => {
+    const v = $('airKeyInput').value.trim();
+    if (!v) { alert('키를 입력해 주세요'); return; }
+    ls('settle.key.air', v);
+    $('airKeyInput').value = ''; $('airKeyRow').classList.add('hidden'); toast('키 저장됨');
+  };
+  $('airKeyEdit').onclick = () => { $('airKeyRow').classList.toggle('hidden'); $('airKeyInput').focus(); };
+  $('airLoadBtn').onclick = load;
+
+  setAirApp(appId);
+  setMode(ls('settle.mode') === 'air' ? 'air' : 'settle');
 })();
 </script>
 </body>
