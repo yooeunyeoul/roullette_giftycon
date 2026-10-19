@@ -19,6 +19,8 @@
   · ⚠️ 에어타임 [승인] = 서버가 리로들리로 **실제 송금**한다(페이팔 '송금 완료'처럼 기록만이 아니다).
     그래서 서버는 승인을 **ADMIN_API_KEY 로만** 받는다 — 정산 키면 403 settlement_key_cannot_send, 화면도 버튼을 끈다.
   · 금액은 센트(amountUsd 500 = $5.00), 번호는 서버가 마스킹해서 준다(뒤 4자리만).
+  2026-10-19 캐시드릴 탭에 페이팔(USD) 합침 — GET /api/v1/admin/paypal(정산 키 허용) · 송금 완료=mark-paid(실송금 아님) · 거절=사유 필수 · 보류 버튼은 hold 있는 앱만.
+  2026-10-19 출금 위험 배지 — 목록 응답 항목의 선택 필드 risk{level,codes,reasons}를 🟢🟡🔴⚪ 배지로 **표시만** 한다(자동 보류·숨김·버튼 비활성 없음), 🟡🔴 탭 = 사유 펼침, 맨 위 요약+필터. risk 없는 옛 서버면 배지·요약 없이 예전과 같다.
 -->
 <style>
   :root { --bg:#0f1115; --card:#181b22; --line:#262a33; --text:#e8eaf0; --muted:#8b93a3; --ok:#22c55e; --bad:#ef4444; --accent:#4f7cff; --amber:#f59e0b; }
@@ -71,6 +73,22 @@
   .air-res { margin-top:8px; padding:8px 10px; border-radius:8px; background:#20242d; font-size:13px; word-break:break-all; }
   .air-res.ok { color:var(--ok); } .air-res.bad { color:var(--bad); } .air-res.wait { color:var(--amber); }
   #airStatusTabs button { padding:9px 2px; font-size:12px; }
+  /* 🚦 출금 위험 배지(2026-10-19) — 표시 전용 */
+  .risk { display:inline-flex; align-items:center; gap:4px; margin-top:6px; padding:4px 8px; border-radius:6px; border:0; font-size:13px; font-weight:700; font-family:inherit; }
+  .risk.green { padding:2px 6px; font-size:11px; font-weight:600; background:rgba(34,197,94,.12); color:var(--ok); }
+  .risk.yellow { background:rgba(245,158,11,.15); color:var(--amber); }
+  .risk.red { background:rgba(239,68,68,.15); color:var(--bad); }
+  .risk.unknown { background:#20242d; color:var(--muted); }
+  .risk .chev { font-size:10px; opacity:.8; }
+  .risk-reasons { margin:6px 0 0; padding:8px 10px 8px 26px; border-radius:8px; background:#20242d; font-size:13px; line-height:1.5; color:var(--text); }
+  .risk-reasons li { word-break:break-all; }
+  .card.risk-red { border-color:var(--bad); }
+  #riskBar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 8px; }
+  #riskBar .rsum { flex:1 1 100%; font-size:14px; font-weight:700; }
+  #riskBar button { flex:1; min-width:0; padding:8px 4px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--muted); font-size:13px; white-space:nowrap; }
+  #riskBar button.on { color:var(--text); border-color:var(--text); }
+  #pendingList[data-rf="green"] .card:not([data-risk="green"]) { display:none; }
+  #pendingList[data-rf="warn"] .card[data-risk="green"] { display:none; }
 </style>
 </head>
 <body>
@@ -104,6 +122,12 @@
     <button data-tab="pending" class="on">대기 <span id="nPending">0</span></button>
     <button data-tab="fail">실패 <span id="nFail">0</span></button>
     <button data-tab="done">완료 <span id="nDone">0</span></button>
+  </div>
+  <div id="riskBar" class="hidden">
+    <div class="rsum" id="riskSum"></div>
+    <button data-rf="all" class="on">전체</button>
+    <button data-rf="green">🟢만</button>
+    <button data-rf="warn">🟡🔴만</button>
   </div>
   <div id="pendingList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
   <div id="failList" class="list hidden"></div>
@@ -168,12 +192,12 @@
           .filter(w => w.appId === this.appId && w.method === 'cash')
           .map(w => ({
             kind: 'bank', id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
-            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
           }))
           .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
         const paypal = (pp.withdrawals || []).map(w => ({
           kind: w.holdReason ? 'paypal-held' : 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
-          holdReason: w.holdReason || '', createdAt: w.createdAt, status: w.status,
+          holdReason: w.holdReason || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
         })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
         // ★ 보류 건(2026-09-27)은 맨 아래 따로 — 위에서부터 쭉 보내도 보류 건에 닿기 전에 멈추게.
         return [...bank, ...paypal.filter(x => x.kind === 'paypal'), ...paypal.filter(x => x.kind === 'paypal-held')];
@@ -196,21 +220,40 @@
   //   fee: 유저 신청 금액에서 오너가 떼고 보내는 이체 수수료(캐시드릴은 500원 떼고 800캐시 페이백).
   //   ★ 2026-09-27 오너: 원화 이체는 **세 앱 모두 500원 수수료**를 떼고 보낸다.
   const APPS = {
+    // ★ 2026-10-19 오너 "캐시드릴 페이팔도 똑같이" — 원화 + 페이팔(해외 USD, **센트**) 한 탭. 정산 키로 목록·완료·거절(approve=실송금은 안 부른다).
+    //   캐시드릴 페이팔엔 보류(hold) 기능이 없다 → hold 미정의 = 카드에 보류 버튼 없음.
     cashdrill: {
       label: '캐시드릴',
+      kind: 'mixed',
       base: 'https://cashdrill-backend.fly.dev',
       fee: 500,
       rejectNote: '계좌번호 오류',
       async list(key) {
-        const r = await api(this.base + '/api/v1/admin/withdraw?limit=200', key);
-        return (r.requests || []).map(w => ({
-          id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
-          holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+        const [r, pp] = await Promise.all([
+          api(this.base + '/api/v1/admin/withdraw?limit=200', key),
+          // 페이팔이 실패해도(옛 서버 401 등) 원화는 보여야 한다.
+          api(this.base + '/api/v1/admin/paypal', key).catch(e => { toast('캐시드릴 페이팔 목록 실패: ' + e.message); return { withdrawals: [] }; }),
+        ]);
+        const bank = (r.requests || []).map(w => ({
+          kind: 'bank', id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
+          holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
         }));
+        const paypal = (pp.withdrawals || []).map(w => ({
+          kind: 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
+          holdReason: '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
+        })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
+        return [...bank, ...paypal];
       },
-      // completed = 송금 완료(+800 페이백 푸시) / rejected = 캐시 환불 + "계좌번호 오류" 푸시
-      complete(key, id) { return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' }); },
-      reject(key, id)   { return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote }); },
+      // 원화: completed = 송금 완료(+800 페이백 푸시) / rejected = 캐시 환불 + "계좌번호 오류" 푸시
+      // 페이팔: mark-paid = 손으로 보낸 건 완료 처리(API 미호출) / reject = 사유 필수, 캐시 환불
+      complete(key, id, item) {
+        if (item && item.kind === 'paypal') return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/mark-paid', key, 'PUT', { note: '정산 페이지' });
+        return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' });
+      },
+      reject(key, id, item, reason) {
+        if (item && item.kind === 'paypal') return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'PUT', { reason: reason });
+        return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote });
+      },
     },
     gold: {
       label: '돈캐드릴',
@@ -227,7 +270,7 @@
           .filter(w => w.appId === this.appId && w.method === 'cash')
           .map(w => ({
             id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
-            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status,
+            holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
           }))
           .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
       },
@@ -268,6 +311,45 @@
   const won = (n) => n.toLocaleString('ko-KR') + '원';
   const digits = (s) => (s || '').replace(/\D/g, '');
 
+  // ── 🚦 출금 위험 배지(2026-10-19) — **표시 전용**. 버튼·순서·보류는 건드리지 않는다. ─────────
+  //   서버 계약: 항목.risk = { level: green|yellow|red|unknown, codes: [], reasons: ['한국어 문장'] } (선택 필드)
+  //   risk 가 없거나 모양이 이상하면 null → 배지·요약 없이 예전 화면 그대로.
+  const RISK = { green: '🟢 깨끗', yellow: '🟡 확인', red: '🔴 위험', unknown: '⚪ 계산 실패' };
+  function normRisk(r) {
+    if (!r || typeof r !== 'object' || !RISK[r.level]) return null;
+    return { level: r.level, codes: Array.isArray(r.codes) ? r.codes.map(String) : [],
+      reasons: Array.isArray(r.reasons) ? r.reasons.filter(x => x != null && x !== '').map(String) : [] };
+  }
+  function riskBadge(item, c) {
+    const r = item.risk;
+    if (!r) return;
+    c.dataset.risk = r.level;
+    if (r.level === 'red') c.classList.add('risk-red');   // 테두리만 붉게
+    const canOpen = r.level !== 'green' && r.reasons.length > 0;
+    const b = el(canOpen ? 'button' : 'div', 'risk ' + r.level, RISK[r.level] + (canOpen ? ' · ' + r.reasons.length : ''));
+    const wrap = el('div'); wrap.appendChild(b); c.appendChild(wrap);
+    if (!canOpen) return;
+    b.type = 'button';
+    const chev = el('span', 'chev', '▼'); b.appendChild(chev);
+    const ul = el('ul', 'risk-reasons hidden');
+    r.reasons.forEach(t => ul.appendChild(el('li', null, t)));   // textContent 만
+    c.appendChild(ul);
+    b.onclick = () => { const open = ul.classList.toggle('hidden') === false; chev.textContent = open ? '▲' : '▼'; };
+  }
+  let riskFilter = 'all';
+  function setRiskFilter(f) {
+    riskFilter = f;
+    $('pendingList').dataset.rf = f;
+    document.querySelectorAll('#riskBar button').forEach(b => b.classList.toggle('on', b.dataset.rf === f));
+  }
+  function riskSummary() {
+    const n = { green: 0, yellow: 0, red: 0, unknown: 0 }; let any = false;
+    items.forEach(i => { if (i.ui === 'pending' && i.risk) { any = true; n[i.risk.level]++; } });
+    $('riskBar').classList.toggle('hidden', !any);
+    if (!any) { if (riskFilter !== 'all') setRiskFilter('all'); return; }
+    $('riskSum').textContent = '🟢 ' + n.green + ' · 🟡 ' + n.yellow + ' · 🔴 ' + n.red + (n.unknown ? ' · ⚪ ' + n.unknown : '');
+  }
+
   let toastTimer;
   function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1200); }
   async function copy(text, label) {
@@ -294,6 +376,7 @@
     });
     $('count').textContent = APPS[app].label + ' · 남은 ' + p + '건' +
       (APPS[app].kind === 'mixed' ? ' · 원화 ' + nb + '건 ' + won(krw) + ' · 페이팔 ' + np + '건 ' + usd(sum) + (nh ? ' · 보류 ' + nh + '건' : '') : '');
+    riskSummary();
   }
 
   function paypalCard(item) {
@@ -303,6 +386,7 @@
     c.appendChild(el('div', 'acct', item.email));
     if (item.blocked) c.appendChild(el('div', 'blocked', '⛔ 차단 계정 — 보내지 마세요 (거절하면 캐시 환불)'));
     if (item.kind === 'paypal-held') { c.classList.add('held'); c.appendChild(el('div', 'heldnote', '⏸ 보류: ' + item.holdReason)); }
+    riskBadge(item, c);
     c.appendChild(el('div', 'meta', new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
     const cr = el('div', 'copyrow');
@@ -317,7 +401,7 @@
       if (item.kind === 'paypal-held') {
         const bu = el('button', 'restore', '보류 해제'); bu.onclick = () => holdAct(item, false); acts.appendChild(bu);
       } else {
-        const bh = el('button', 'hold', '보류'); bh.onclick = () => holdAct(item, true); acts.appendChild(bh);
+        if (APPS[app].hold) { const bh = el('button', 'hold', '보류'); bh.onclick = () => holdAct(item, true); acts.appendChild(bh); }
         if (!item.blocked) { const bo = el('button', 'ok', '송금 완료'); bo.onclick = () => act(item, 'complete', c); acts.appendChild(bo); }
       }
     } else {
@@ -341,6 +425,7 @@
     c.appendChild(amt);
     c.appendChild(el('div', 'acct', item.bank + ' ' + item.account));
     const h = el('div', 'holder', '예금주 '); h.appendChild(el('b', null, item.holder)); c.appendChild(h);
+    riskBadge(item, c);
     c.appendChild(el('div', 'meta', (item.status === 'approved' ? '승인됨 · ' : '') + new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
     const cr = el('div', 'copyrow');
@@ -457,7 +542,7 @@
     $('hint').classList.toggle('hidden', false);
     $('hintPaypal').classList.toggle('hidden', APPS[a].kind !== 'mixed');
     $('keyInput').value = '';
-    items.clear(); counts();
+    items.clear(); setRiskFilter('all'); counts();
     $('pendingList').replaceChildren(el('div', 'empty', APPS[a].label + ' — 불러오기를 눌러 주세요'));
     $('failList').replaceChildren(); $('doneList').replaceChildren();
     showTab('pending');
@@ -466,6 +551,7 @@
   // ── 이벤트 ───────────────────────────────────────────────────────────────
   document.querySelectorAll('#appSeg button').forEach(b => b.onclick = () => setApp(b.dataset.app));
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+  document.querySelectorAll('#riskBar button').forEach(b => b.onclick = () => setRiskFilter(b.dataset.rf));
   $('keySave').onclick = () => {
     const v = $('keyInput').value.trim();
     if (!v) { alert('키를 입력해 주세요'); return; }
