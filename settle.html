@@ -19,6 +19,7 @@
   · ⚠️ 에어타임 [승인] = 서버가 리로들리로 **실제 송금**한다(페이팔 '송금 완료'처럼 기록만이 아니다).
     그래서 서버는 승인을 **ADMIN_API_KEY 로만** 받는다 — 정산 키면 403 settlement_key_cannot_send, 화면도 버튼을 끈다.
   · 금액은 센트(amountUsd 500 = $5.00), 번호는 서버가 마스킹해서 준다(뒤 4자리만).
+  2026-10-22 페이팔 카드에 [페이팔 확인 필요] 원클릭 — 페이팔이 그 주소로 송금을 거부할 때. 사유 입력 없이 서버가 고정 사유(reasonCode=paypal_unreachable)로 거절·환불 + 유저에게 "페이팔 주소 확인" 푸시 + 앱별 CS 메일함에서 안내 메일(출금 1건당 1통). 기존 [거절](사유 필수)은 그대로.
   2026-10-19 캐시드릴 탭에 페이팔(USD) 합침 — GET /api/v1/admin/paypal(정산 키 허용) · 송금 완료=mark-paid(실송금 아님) · 거절=사유 필수 · 보류 버튼은 hold 있는 앱만.
   2026-10-19 출금 위험 배지 — 목록 응답 항목의 선택 필드 risk{level,codes,reasons}를 🟢🟡🔴⚪ 배지로 **표시만** 한다(자동 보류·숨김·버튼 비활성 없음), 🟡🔴 탭 = 사유 펼침, 맨 위 요약+필터. risk 없는 옛 서버면 배지·요약 없이 예전과 같다.
 -->
@@ -66,6 +67,7 @@
   .card.held { opacity:.6; border-style:dashed; }
   .heldnote { display:inline-block; margin-top:6px; padding:4px 8px; border-radius:6px; background:rgba(245,158,11,.15); color:var(--amber); font-size:13px; font-weight:700; }
   .acts .hold { background:#6b5a1f; }
+  .acts .ppchk { background:#8a4b14; }
   /* 📱 에어타임 승인(2026-10-18) */
   #modeSeg button.on { background:#2a3550; color:#fff; border-color:#4f7cff; }
   .air-bal { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:10px; font-size:14px; }
@@ -116,7 +118,7 @@
     <button class="btn ghost" id="keyEdit" title="키 변경">🔑</button>
   </div>
   <p class="note" id="hint" data-bank="1">계좌번호 → 카카오뱅크에 붙여넣기 → 금액 붙여넣기 → 이체 → <b>완료</b>. 카카오뱅크에 뜬 예금주가 다르거나 없는 계좌면 <b>실패</b>(유저에게 "계좌번호 오류" 푸시 + 캐시 환불).</p>
-  <p class="note hidden" id="hintPaypal">이메일 복사 → 페이팔 앱에서 <b>USD</b> 로 송금(금액 복사) → <b>송금 완료</b>. 보내면 안 되는 건은 <b>거절</b>(사유 필수, 캐시 환불). <span class="warn">빨간 "차단 계정" 은 보내지 마세요.</span></p>
+  <p class="note hidden" id="hintPaypal">이메일 복사 → 페이팔 앱에서 <b>USD</b> 로 송금(금액 복사) → <b>송금 완료</b>. 페이팔이 그 주소로 안 보내지면 <b>페이팔 확인 필요</b>(사유 입력 없음 · 환불 + 유저에게 푸시·안내 메일 자동). 보내면 안 되는 건은 <b>거절</b>(사유 필수, 캐시 환불). <span class="warn">빨간 "차단 계정" 은 보내지 마세요.</span></p>
 
   <div class="tabs">
     <button data-tab="pending" class="on">대기 <span id="nPending">0</span></button>
@@ -214,6 +216,8 @@
         if (item.kind === 'paypal' || item.kind === 'paypal-held') return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reason: reason });
         return api(this.base + '/admin/withdrawals/' + encodeURIComponent(id) + '/reject', key, 'POST');
       },
+      // [페이팔 확인 필요](2026-10-22): 사유 없이 고정 코드 → 서버가 환불·푸시·안내 메일까지.
+      paypalCheck(key, id) { return api(this.base + '/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'POST', { appId: this.appId, reasonCode: 'paypal_unreachable' }); },
     };
   }
 
@@ -254,6 +258,8 @@
         if (item && item.kind === 'paypal') return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'PUT', { reason: reason });
         return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote });
       },
+      // [페이팔 확인 필요](2026-10-22): 사유 없이 고정 코드 → 서버가 환불·푸시·안내 메일(support@gold-step.kr)까지.
+      paypalCheck(key, id) { return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'PUT', { reasonCode: 'paypal_unreachable' }); },
     },
     gold: {
       label: '돈캐드릴',
@@ -394,6 +400,12 @@
     const b2 = el('button', null, '금액 복사');   b2.onclick = () => copy((item.cents / 100).toFixed(2), '금액');
     cr.append(b1, b2); c.appendChild(cr);
 
+    // ★ [페이팔 확인 필요] 원클릭(2026-10-22) — 버튼이 4개면 폰에서 비좁아 한 줄 따로.
+    if (item.ui === 'pending' && APPS[app].paypalCheck) {
+      const row = el('div', 'acts');
+      const bc = el('button', 'ppchk', '페이팔 확인 필요 (사유·메일 자동)'); bc.onclick = () => act(item, 'paypalCheck', c);
+      row.appendChild(bc); c.appendChild(row);
+    }
     const acts = el('div', 'acts');
     if (item.ui === 'pending') {
       const bf = el('button', 'fail', '거절'); bf.onclick = () => act(item, 'reject', c);
@@ -405,7 +417,9 @@
         if (!item.blocked) { const bo = el('button', 'ok', '송금 완료'); bo.onclick = () => act(item, 'complete', c); acts.appendChild(bo); }
       }
     } else {
-      acts.appendChild(el('div', 'meta', item.ui === 'fail' ? '거절됨 — 캐시 환불 + 푸시 발송' : '완료 처리됨 — 유저에게 푸시 발송'));
+      acts.appendChild(el('div', 'meta', item.ui === 'fail'
+        ? (item.paypalCheck ? '페이팔 확인 필요로 거절 — 캐시 환불 + 푸시 + 안내 메일' : '거절됨 — 캐시 환불 + 푸시 발송')
+        : '완료 처리됨 — 유저에게 푸시 발송'));
     }
     c.appendChild(acts);
     if (item.ui === 'fail') c.classList.add('fail');
@@ -454,6 +468,8 @@
     if (item.kind === 'paypal' || item.kind === 'paypal-held') {
       if (kind === 'complete') {
         if (!confirm(usd(item.cents) + ' → ' + item.email + '\n페이팔에서 송금을 마쳤나요?\n(되돌릴 수 없음)')) return;
+      } else if (kind === 'paypalCheck') {
+        if (!confirm(item.email + ' ' + usd(item.cents) + '\n페이팔이 이 주소로 송금을 거부하나요?\n\n거절하고 캐시를 환불한 뒤, 유저에게 "페이팔 주소를 확인하고 다시 신청" 푸시와 안내 메일을 보냅니다.\n(되돌릴 수 없음)')) return;
       } else {
         // 사유 필수 — 서버도 빈 사유는 400. 유저에게는 원문이 안 보인다(코드로만 분류).
         reason = prompt(item.email + ' ' + usd(item.cents) + '\n거절 사유(필수 · 유저에게 안 보임). 캐시는 환불됩니다:', item.blocked ? '차단 계정' : '');
@@ -470,12 +486,13 @@
     const btns = cardEl.querySelectorAll('.acts button'); btns.forEach(b => b.disabled = true);
     try {
       if (kind === 'complete') await cfg.complete(keyOf(app), item.id, item);
+      else if (kind === 'paypalCheck') { await cfg.paypalCheck(keyOf(app), item.id, item); item.paypalCheck = true; }
       else await cfg.reject(keyOf(app), item.id, item, reason);
       item.ui = kind === 'complete' ? 'done' : 'fail';
       cardEl.remove();
       const target = $(item.ui === 'done' ? 'doneList' : 'failList');
       target.prepend(card(item));
-      toast(kind === 'complete' ? '완료 처리됨' : '반려 처리됨');
+      toast(kind === 'complete' ? '완료 처리됨' : kind === 'paypalCheck' ? '거절 + 페이팔 확인 안내 발송' : '반려 처리됨');
       counts();
       if (!$('pendingList').children.length) $('pendingList').appendChild(el('div', 'empty', '대기 건이 없습니다 🎉'));
     } catch (e) {
