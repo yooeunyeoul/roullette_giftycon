@@ -228,7 +228,7 @@
   //   ★ 2026-09-27 오너: 원화 이체는 **세 앱 모두 500원 수수료**를 떼고 보낸다.
   const APPS = {
     // ★ 2026-10-19 오너 "캐시드릴 페이팔도 똑같이" — 원화 + 페이팔(해외 USD, **센트**) 한 탭. 정산 키로 목록·완료·거절(approve=실송금은 안 부른다).
-    //   캐시드릴 페이팔엔 보류(hold) 기능이 없다 → hold 미정의 = 카드에 보류 버튼 없음.
+    //   ★ 2026-10-23 캐시드릴 페이팔 보류(hold/unhold, 정산 키) 추가 — 보류 건은 맨 아래·송금 완료 버튼 없음, 서버도 409.
     cashdrill: {
       label: '캐시드릴',
       kind: 'mixed',
@@ -246,10 +246,10 @@
           holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
         }));
         const paypal = (pp.withdrawals || []).map(w => ({
-          kind: 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
-          holdReason: '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
+          kind: w.holdReason ? 'paypal-held' : 'paypal', id: w.id, cents: Number(w.amountUsd), email: w.paypalEmail || '', blocked: !!w.payoutBlocked,
+          holdReason: w.holdReason || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
         })).sort((x, y) => (x.cents - y.cents) || (new Date(x.createdAt) - new Date(y.createdAt)));
-        return [...bank, ...paypal];
+        return [...bank, ...paypal.filter(x => x.kind === 'paypal'), ...paypal.filter(x => x.kind === 'paypal-held')];
       },
       // 원화: completed = 송금 완료(+800 페이백 푸시) / rejected = 캐시 환불 + "계좌번호 오류" 푸시
       // 페이팔: mark-paid = 손으로 보낸 건 완료 처리(API 미호출) / reject = 사유 필수, 캐시 환불
@@ -258,11 +258,13 @@
         return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' });
       },
       reject(key, id, item, reason) {
-        if (item && item.kind === 'paypal') return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'PUT', { reason: reason });
+        if (item && (item.kind === 'paypal' || item.kind === 'paypal-held')) return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'PUT', { reason: reason });
         return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: this.rejectNote });
       },
       // [페이팔 확인 필요](2026-10-22): 사유 없이 고정 코드 → 서버가 환불·푸시·안내 메일(support@gold-step.kr)까지.
       paypalCheck(key, id) { return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/reject', key, 'PUT', { reasonCode: 'paypal_unreachable' }); },
+      hold(key, id, reason) { return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/hold', key, 'PUT', { reason: reason }); },
+      unhold(key, id) { return api(this.base + '/api/v1/admin/paypal/' + encodeURIComponent(id) + '/unhold', key, 'PUT', {}); },
     },
     gold: {
       label: '돈캐드릴',
