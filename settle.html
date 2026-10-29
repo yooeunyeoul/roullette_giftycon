@@ -26,7 +26,7 @@
   · 키: 에어타임 캐시드릴 전용(settle.key.air.cashdrill, 송금하려면 캐시드릴 ADMIN_API_KEY) → 없으면 출금 정산 캐시드릴 키(정산 키, 목록·거절만).
   2026-10-29 골드스텝(GoldManbo) 탭 — 원화 계좌이체만(한국 전용). 골드스텝 백엔드 goldmanbo-backend GET /api/v1/admin/withdraw?status=PENDING ·
     PUT /api/v1/admin/withdraw/:id {status:'completed'|'rejected', adminNotes}. 캐시드릴과 같은 계약, 정산 키(SETTLEMENT_API_KEY 또는 ADMIN_API_KEY).
-  · 키는 골드스텝 백엔드 키(다른 앱 키로는 401) — settle.key.goldstep 에 따로 저장.
+  · 키는 settle.key.goldstep 이 있으면 그것, 없으면 돈캐드릴 탭 키(서버 SETTLEMENT_API_KEY 를 같은 값으로 둔다, 10/29).
   · 실입금액 = 신청액 − 500원(옛 send.html 과 같다), 완료 = 수수료 페이백 1,000P + 완료 푸시, 실패 = 사유 입력(기본 "계좌번호 오류") + 포인트 환불 + 반려 푸시.
   · 카드에 판단 정보(닉네임·가입일·최근 활동·과거 출금·같은 계좌 다른 유저 수)를 텍스트로만 표시. 옛 send.html(DB 행 복사→QR) 흐름을 대체한다.
   2026-10-19 출금 위험 배지 — 목록 응답 항목의 선택 필드 risk{level,codes,reasons}를 🟢🟡🔴⚪ 배지로 **표시만** 한다(자동 보류·숨김·버튼 비활성 없음), 🟡🔴 탭 = 사유 펼침, 맨 위 요약+필터. risk 없는 옛 서버면 배지·요약 없이 예전과 같다.
@@ -313,6 +313,7 @@
     goldstep: {
       label: '골드스텝',
       base: 'https://goldmanbo-backend.fly.dev',
+      keyFallback: 'gold',   // 서버 SETTLEMENT_API_KEY 를 돈캐드릴 탭 키와 같게 넣는다(10/29) — 폰에 새 키 안 넣어도 된다
       fee: 500,   // 이체 수수료 500원 — 옛 send.html FEE 와 같다. 완료 시 서버가 1,000P 페이백.
       rejectNote: '계좌번호 오류',
       askReason: true,
