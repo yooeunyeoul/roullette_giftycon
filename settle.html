@@ -30,6 +30,7 @@
   · 실입금액 = 신청액 − 500원(옛 send.html 과 같다), 완료 = 수수료 페이백 1,000P + 완료 푸시, 실패 = 사유 입력(기본 "계좌번호 오류") + 포인트 환불 + 반려 푸시.
   · 카드에 판단 정보(닉네임·가입일·최근 활동·과거 출금·같은 계좌 다른 유저 수)를 텍스트로만 표시. 옛 send.html(DB 행 복사→QR) 흐름을 대체한다.
   2026-10-19 출금 위험 배지 — 목록 응답 항목의 선택 필드 risk{level,codes,reasons}를 🟢🟡🔴⚪ 배지로 **표시만** 한다(자동 보류·숨김·버튼 비활성 없음), 🟡🔴 탭 = 사유 펼침, 맨 위 요약+필터. risk 없는 옛 서버면 배지·요약 없이 예전과 같다.
+  2026-10-29 📱 에어타임 대기 카드에도 같은 risk 배지(rf 4앱·캐시드릴) + 잔액줄에 🟢🟡🔴 요약(🟢 합계 금액). 통신비 전용 신호: 같은 번호 다계정·초대 보상 위주+본인 미활동·초대자 파밍. 표시 전용.
 -->
 <style>
   :root { --bg:#0f1115; --card:#181b22; --line:#262a33; --text:#e8eaf0; --muted:#8b93a3; --ok:#22c55e; --bad:#ef4444; --accent:#4f7cff; --amber:#f59e0b; }
@@ -723,6 +724,32 @@
     return box;
   }
 
+  // ── 🚦 위험 배지(2026-10-29) — 위 출금 정산의 riskBadge 와 같은 모양·같은 CSS. **표시 전용**(버튼·순서 그대로).
+  //   서버 계약: 대기 항목.risk = { level: green|yellow|red|unknown, codes: [], reasons: [] } (선택 필드)
+  //   risk 가 없으면(옛 서버) 배지·요약 없이 예전 화면 그대로.
+  const RISK = { green: '🟢 깨끗', yellow: '🟡 확인', red: '🔴 위험', unknown: '⚪ 계산 실패' };
+  function normRisk(r) {
+    if (!r || typeof r !== 'object' || !RISK[r.level]) return null;
+    return { level: r.level, codes: Array.isArray(r.codes) ? r.codes.map(String) : [],
+      reasons: Array.isArray(r.reasons) ? r.reasons.filter(x => x != null && x !== '').map(String) : [] };
+  }
+  function riskBadge(r, c) {
+    if (!r) return;
+    c.dataset.risk = r.level;
+    if (r.level === 'red') c.classList.add('risk-red');
+    const canOpen = r.level !== 'green' && r.reasons.length > 0;
+    const b = el(canOpen ? 'button' : 'div', 'risk ' + r.level, RISK[r.level] + (canOpen ? ' · ' + r.reasons.length : ''));
+    const wrap = el('div'); wrap.appendChild(b); c.appendChild(wrap);
+    if (!canOpen) return;
+    b.type = 'button';
+    const chev = el('span', 'chev', '▼'); b.appendChild(chev);
+    const ul = el('ul', 'risk-reasons');   // 통신비는 건수가 적어 사유를 처음부터 펼친다
+    chev.textContent = '▲';
+    r.reasons.forEach(t => ul.appendChild(el('li', null, t)));   // textContent 만
+    c.appendChild(ul);
+    b.onclick = () => { const open = ul.classList.toggle('hidden') === false; chev.textContent = open ? '▲' : '▼'; };
+  }
+
   function airCard(w) {
     const c = el('div', 'card');
     const amt = el('div', 'amt', usd(w.amountUsd));
@@ -735,6 +762,7 @@
       + (w.completedAt ? ' · 종결 ' + when(w.completedAt) : '')));
     if (w.status !== 'PENDING' && (w.reloadlyStatus || w.reloadlyTransactionId || w.errorMessage)) c.appendChild(resultBox(w));
     if (w.status === 'COMPLETED' && w.deliveredAmount != null) c.appendChild(el('div', 'meta', '도착 ' + w.deliveredAmount + ' ' + (w.deliveredCurrency || '')));
+    if (w.status === 'PENDING') riskBadge(normRisk(w.risk), c);
 
     if (w.status === 'PENDING') {
       const acts = el('div', 'acts');
@@ -799,6 +827,14 @@
       const sum = pendingLeft.reduce((a, w) => a + Number(w.sentUsd ?? w.amountUsd ?? 0), 0);
       bal.appendChild(document.createTextNode(' · 대기 ' + pendingLeft.length + '건 ' + usd(sum)));
       if (balanceUsd != null && sum / 100 > Number(balanceUsd)) bal.appendChild(el('div', 'warn', '⚠️ 대기 합계가 지갑 잔액보다 커요 — 충전 전엔 일부가 실패합니다'));
+      const rs = pendingLeft.map(w => normRisk(w.risk)).filter(Boolean);
+      if (rs.length) {
+        const n = { green: 0, yellow: 0, red: 0, unknown: 0 };
+        rs.forEach(r => n[r.level]++);
+        const g = pendingLeft.filter(w => { const r = normRisk(w.risk); return r && r.level === 'green'; })
+          .reduce((a, w) => a + Number(w.sentUsd ?? w.amountUsd ?? 0), 0);
+        bal.appendChild(el('div', null, '🟢 ' + n.green + ' (' + usd(g) + ') · 🟡 ' + n.yellow + ' · 🔴 ' + n.red + (n.unknown ? ' · ⚪ ' + n.unknown : '')));
+      }
     }
   }
 
