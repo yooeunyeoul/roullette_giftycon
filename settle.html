@@ -24,6 +24,11 @@
   2026-10-29 📱 에어타임 모드에 캐시드릴 추가 — 캐시드릴 백엔드 GET /api/v1/settlement/airtime?status= · POST /:id/approve · POST /:id/reject(사유 필수).
   · rf 와 같은 응답 모양·같은 카드 코드. 다른 건 서버 주소와 키뿐 — 캐시드릴 키는 캐시드릴 백엔드 키다(rf 키로는 401).
   · 키: 에어타임 캐시드릴 전용(settle.key.air.cashdrill, 송금하려면 캐시드릴 ADMIN_API_KEY) → 없으면 출금 정산 캐시드릴 키(정산 키, 목록·거절만).
+  2026-10-29 골드스텝(GoldManbo) 탭 — 원화 계좌이체만(한국 전용). 골드스텝 백엔드 goldmanbo-backend GET /api/v1/admin/withdraw?status=PENDING ·
+    PUT /api/v1/admin/withdraw/:id {status:'completed'|'rejected', adminNotes}. 캐시드릴과 같은 계약, 정산 키(SETTLEMENT_API_KEY 또는 ADMIN_API_KEY).
+  · 키는 골드스텝 백엔드 키(다른 앱 키로는 401) — settle.key.goldstep 에 따로 저장.
+  · 실입금액 = 신청액 − 500원(옛 send.html 과 같다), 완료 = 수수료 페이백 1,000P + 완료 푸시, 실패 = 사유 입력(기본 "계좌번호 오류") + 포인트 환불 + 반려 푸시.
+  · 카드에 판단 정보(닉네임·가입일·최근 활동·과거 출금·같은 계좌 다른 유저 수)를 텍스트로만 표시. 옛 send.html(DB 행 복사→QR) 흐름을 대체한다.
   2026-10-19 출금 위험 배지 — 목록 응답 항목의 선택 필드 risk{level,codes,reasons}를 🟢🟡🔴⚪ 배지로 **표시만** 한다(자동 보류·숨김·버튼 비활성 없음), 🟡🔴 탭 = 사유 펼침, 맨 위 요약+필터. risk 없는 옛 서버면 배지·요약 없이 예전과 같다.
 -->
 <style>
@@ -115,6 +120,7 @@
     <button data-app="gold">돈캐드릴</button>
     <button data-app="cashfi">캐시파이</button>
     <button data-app="cashstep">캐시스텝</button>
+    <button data-app="goldstep">골드스텝</button>
   </div>
 
   <div class="row" id="keyRow">
@@ -301,6 +307,34 @@
     cashfi: rfMixed('캐시파이', 'com.rewardfactory.cashfi'),
     // 캐시스텝(2026-10-09) — 오너가 폰에서 캐시스텝 원화 신청을 볼 곳이 없었다(10/8 첫 ₩2,000 신청).
     cashstep: rfMixed('캐시스텝', 'com.rewardfactory.cashstep'),
+    // ★ 골드스텝(2026-10-29, 오너 "골드스텝도 이체하는 어드민") — 원화 계좌이체만(한국 전용, 페이팔 없음).
+    //   골드스텝 백엔드(goldmanbo-backend)는 캐시드릴과 같은 계약: GET 목록 / PUT {status, adminNotes}.
+    //   서버는 반려 사유를 필수로 받는다(푸시 본문에 실린다) → 실패 누를 때 사유를 묻는다(기본 "계좌번호 오류").
+    goldstep: {
+      label: '골드스텝',
+      base: 'https://goldmanbo-backend.fly.dev',
+      fee: 500,   // 이체 수수료 500원 — 옛 send.html FEE 와 같다. 완료 시 서버가 1,000P 페이백.
+      rejectNote: '계좌번호 오류',
+      askReason: true,
+      async list(key) {
+        const r = await api(this.base + '/api/v1/admin/withdraw?status=PENDING&limit=200', key);
+        return (r.requests || []).map(w => ({
+          id: w.id, amount: Number(w.amountKrw), bank: w.bankName || '', account: w.accountNumber || '',
+          holder: w.accountHolder || '', createdAt: w.createdAt, status: w.status, risk: normRisk(w.risk),
+          facts: {
+            nickname: w.nickname, provider: w.provider, userCreatedAt: w.userCreatedAt, lastActivityAt: w.lastActivityAt,
+            completedCount: w.completedCount, completedAmountKrw: w.completedAmountKrw, rejectedCount: w.rejectedCount,
+            sameAccountUsers: w.sameAccountUsers,
+          },
+        }));   // 서버가 오래된 순으로 준다
+      },
+      complete(key, id) {
+        return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'completed', adminNotes: '정산 페이지 송금 완료' });
+      },
+      reject(key, id, item, reason) {
+        return api(this.base + '/api/v1/admin/withdraw/' + encodeURIComponent(id), key, 'PUT', { status: 'rejected', adminNotes: reason || this.rejectNote });
+      },
+    },
   };
 
   let app = localStorage.getItem('settle.app') || 'cashdrill';
@@ -441,6 +475,24 @@
     return c;
   }
 
+  // 골드스텝 판단 정보(2026-10-29) — 서버 값은 전부 textContent 로만 나간다(el 의 세 번째 인자).
+  const ymd = (d) => d ? new Date(d).toLocaleDateString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric' }) : '?';
+  function ago(d) {
+    if (!d) return '기록 없음';
+    const h = (Date.now() - new Date(d).getTime()) / 3600000;
+    return h < 1 ? '1시간 안' : h < 24 ? Math.floor(h) + '시간 전' : Math.floor(h / 24) + '일 전';
+  }
+  function factsLines(f) {
+    const lines = [];
+    lines.push(['👤 ' + (f.nickname || '(닉네임 없음)') + (f.provider ? ' · ' + f.provider : '') + ' · 가입 ' + ymd(f.userCreatedAt) + ' · 최근 활동 ' + ago(f.lastActivityAt), false]);
+    if (f.completedCount != null) {
+      lines.push([(f.completedCount ? '지난 출금 완료 ' + f.completedCount + '건 ' + won(Number(f.completedAmountKrw) || 0) : '첫 출금') +
+        (f.rejectedCount ? ' · 반려 ' + f.rejectedCount + '건' : ''), false]);
+    }
+    if (f.sameAccountUsers != null && f.sameAccountUsers >= 2) lines.push(['⚠️ 같은 계좌로 신청한 다른 유저가 있어요 (총 ' + f.sameAccountUsers + '명)', true]);
+    return lines;
+  }
+
   function card(item) {
     const cfg = APPS[app];
     if (item.kind === 'paypal' || item.kind === 'paypal-held') return paypalCard(item);
@@ -454,6 +506,7 @@
     c.appendChild(el('div', 'acct', item.bank + ' ' + item.account));
     const h = el('div', 'holder', '예금주 '); h.appendChild(el('b', null, item.holder)); c.appendChild(h);
     riskBadge(item, c);
+    if (item.facts) factsLines(item.facts).forEach(([t, warn]) => c.appendChild(el('div', warn ? 'meta warn' : 'meta', t)));
     c.appendChild(el('div', 'meta', (item.status === 'approved' ? '승인됨 · ' : '') + new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
     const cr = el('div', 'copyrow');
@@ -490,6 +543,12 @@
         if (reason === null) return;
         if (!reason.trim()) { alert('거절 사유를 입력해 주세요'); return; }
       }
+    } else if (kind !== 'complete' && cfg.askReason) {
+      // 골드스텝: 서버가 사유 필수 — 입력한 문장이 그대로 유저 반려 푸시에 실린다.
+      reason = prompt(item.holder + ' ' + item.bank + ' ' + item.account + '\n반려 사유(필수 · 유저 푸시에 그대로 실림). 포인트는 환불됩니다:', cfg.rejectNote || '계좌번호 오류');
+      if (reason === null) return;
+      reason = reason.trim();
+      if (!reason) { alert('반려 사유를 입력해 주세요'); return; }
     } else {
     const send = Math.max(0, item.amount - cfg.fee);
     const q = kind === 'complete'
