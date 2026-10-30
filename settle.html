@@ -869,7 +869,8 @@
   //   멈춤 규칙(돈이 걸려 있어 보수적으로):
   //     · 남은 잔액(불러올 때 잔액 − 보낸 합계) < 다음 건 금액 → 보내기 전에 멈춤
   //     · 리로들리가 요청을 거절(FAILED + '거절') → 잔액 부족일 수 있어 멈춤(서버가 원인을 구분해 주지 않는다)
-  //     · PROCESSING(응답 없음 = 송금 여부 불명)·네트워크 오류·401/403/5xx → 멈춤
+  //     · PROCESSING(응답 없음 = 송금 여부 불명) → 그 건은 처리중으로 두고 계속(10/30 오너), 단 연속 3건이면 멈춤
+  //     · 네트워크 오류·401/403/5xx(서버 응답 자체를 못 받음) → 멈춤
   //     · 409(이미 처리됨)·404·리로들리 송금 실패(환불됨) → 그 건만 실패 목록에 넣고 계속
   //   끝나면 목록을 **한 번만** 다시 불러온다(잔액·남은 건 갱신).
   const isGreen = (w) => { const r = normRisk(w.risk); return !!r && r.level === 'green'; };
@@ -909,8 +910,8 @@
     const btn = $('airBatchBtn'); btn.disabled = true;
     const stopBtn = $('airBatchStop'); stopBtn.classList.remove('hidden'); stopBtn.disabled = false;
     let remain = balanceUsd == null ? null : Math.round(Number(balanceUsd) * 100);   // 센트
-    let ok = 0, sent = 0, stopped = '';
-    const failed = [];
+    let ok = 0, sent = 0, stopped = '', procRun = 0;
+    const failed = [], waiting = [];
     const label = (w) => usd(amtOf(w)) + ' ' + (w.countryCode || '??') + ' 📞 ' + (w.phone || '');
     try {
       for (let i = 0; i < queue.length; i++) {
@@ -943,18 +944,24 @@
           if (c) collapse(w, c, 'bad', '❌ ' + why);
           if (/거절|balance|insufficient/i.test(why)) { stopped = '리로들리가 요청을 거절 — 잔액 부족일 수 있어 멈춤. 잔액 확인 뒤 다시 누르세요'; break; }
         } else {
-          // PROCESSING = 리로들리 응답 없음(나갔는지 모름). 리로들리 쪽이 불안정하다는 신호라 멈춘다.
+          // PROCESSING = 리로들리 응답 없음(나갔는지 모름). ★ 10/30 오너: 그 건만 처리중으로 두고 다음 건으로 넘어간다.
+          //   서버 정합성 점검(5분)이 나중에 성공/실패+환불로 확정한다. 잔액은 나간 걸로 잡아 둔다(보수적).
+          //   단 연속 3건이면 리로들리가 사실상 멈춘 것이라 멈춘다(건당 최대 60초씩 낭비 방지).
           sent += amtOf(w); if (remain != null) remain -= amtOf(w);
-          if (c) collapse(w, c, 'wait', '⏳ 처리중 — [처리중] 탭에서 결과 확인');
-          stopped = label(w) + ' — 리로들리 응답 없음(처리중). 처리중 탭 확인 뒤 다시 누르세요';
-          break;
+          if (c) collapse(w, c, 'wait', '⏳ 처리중 — 자동 확인 대기(다시 누르지 마세요)');
+          waiting.push(label(w));
+          if (++procRun >= 3) { stopped = '리로들리 응답 없음 연속 3건 — 리로들리가 느린 상태. 10~20분 뒤 다시 누르세요'; break; }
+          await sleep(200);
+          continue;
         }
+        procRun = 0;
         await sleep(200);
       }
     } finally {
       batching = false; setBusy(false);
       const lines = ['🟢 일괄 승인 끝 — 성공 ' + ok + '건 ' + usd(sent) + ' / 대상 ' + queue.length + '건'];
       if (stopped) lines.push('⛔ 멈춤: ' + stopped);
+      if (waiting.length) { lines.push('⏳ 처리중(결과 확인 대기 — 다시 누르지 말 것, 5분 안에 자동 확정) ' + waiting.length + '건:'); waiting.forEach(f => lines.push('· ' + f)); }
       if (failed.length) { lines.push('실패·건너뜀 ' + failed.length + '건:'); failed.forEach(f => lines.push('· ' + f)); }
       batchBox(lines, stopped || failed.length ? 'bad' : 'ok');
       toast('일괄 승인 끝 — 성공 ' + ok + '건');
