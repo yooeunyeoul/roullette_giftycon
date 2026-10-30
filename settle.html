@@ -774,7 +774,7 @@
     if (w.sentUsd != null && Number(w.sentUsd) !== Number(w.amountUsd)) amt.appendChild(el('small', null, '실송금 ' + usd(w.sentUsd)));
     if (w.cashDeducted != null) amt.appendChild(el('small', null, Number(w.cashDeducted).toLocaleString('ko-KR') + '캐시'));
     c.appendChild(amt);
-    c.appendChild(el('div', 'acct', (w.countryCode || '??') + ' · ' + (w.operatorName || '통신사 미확인')));
+    c.appendChild(el('div', 'acct', (w.productType === 'data' ? '📶 데이터 · ' + (w.planDescription || '') + ' · ' : '') + (w.countryCode || '??') + ' · ' + (w.operatorName || '통신사 미확인')));
     c.appendChild(el('div', 'holder', '📞 ' + (w.phone || '')));
     c.appendChild(el('div', 'meta', '신청 ' + when(w.createdAt) + ' · 유저 ' + String(w.userId || '').slice(0, 8)
       + (w.completedAt ? ' · 종결 ' + when(w.completedAt) : '')));
@@ -798,7 +798,7 @@
   async function approve(w, c, btns) {
     if (batching || inflight.has(w.id)) return;
     if (!canSend) { alert('정산 키로는 송금할 수 없어요. 🔑 에 어드민 키를 넣어 주세요.'); return; }
-    if (!confirm('리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
+    if (!confirm('리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.productType === 'data' ? '📶 데이터 ' + (w.planDescription || '') + '\n' : '') + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
     btns.forEach(b => b.disabled = true);
     inflight.add(w.id); renderBatchBtn();
     try {
