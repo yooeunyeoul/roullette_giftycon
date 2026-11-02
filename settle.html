@@ -1138,7 +1138,7 @@
   // 수취 정보 필드 — 순서 = 센트비 입력 순서에 가깝게. 값 있는 것만 그린다.
   const FIELDS = [
     ['gcashNumber', 'GCash 번호'], ['fullName', '이름'],
-    ['bankName', '은행'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'], ['phoneNumber', '휴대폰'],
+    ['bankName', '은행'], ['ifsc', 'IFSC'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'], ['phoneNumber', '휴대폰'],
     ['routingNumber', '라우팅'], ['swiftCode', 'SWIFT'], ['iban', 'IBAN'], ['branchCode', '지점 코드'],
     ['accountType', '계좌 종류'], ['address', '주소'], ['email', '이메일'],
   ];
@@ -1277,7 +1277,7 @@
     if (blocked) c.classList.add('isblocked');
     const method = w.method === 'gcash' ? 'gcash' : w.method === 'bank' ? 'bank' : '';
     const badges = el('div', 'cp-badges');
-    const CN = { PH: ['🇵🇭', '필리핀', 'PHP'], ZA: ['🇿🇦', '남아공', 'ZAR'], ID: ['🇮🇩', '인도네시아', 'IDR'], NG: ['🇳🇬', '나이지리아', 'NGN'], VN: ['🇻🇳', '베트남', 'VND'], US: ['🇺🇸', '미국', 'USD'] };
+    const CN = { PH: ['🇵🇭', '필리핀', 'PHP'], ZA: ['🇿🇦', '남아공', 'ZAR'], ID: ['🇮🇩', '인도네시아', 'IDR'], NG: ['🇳🇬', '나이지리아', 'NGN'], VN: ['🇻🇳', '베트남', 'VND'], US: ['🇺🇸', '미국', 'USD'], IN: ['🇮🇳', '인도', 'INR'] };
     const cn = CN[w.country] || ['🌐', w.country || '나라 미상', w.currency || ''];
     badges.appendChild(el('span', 'cp-badge cp-country', cn[0] + ' ' + cn[1] + ' (' + (w.country || '??') + ' · ' + (w.currency || cn[2]) + ')'));
     badges.appendChild(el('span', 'cp-badge ' + method, method === 'gcash' ? 'GCash' : method === 'bank' ? '🏦 은행' : String(w.method || '방법 미상')));
@@ -1436,7 +1436,9 @@
     if (w && w.method === 'bank') {
       var acct = cpDigits(rc.accountNumber || rc.iban);
       if (!acct) return '';
-      return 'bank:' + String(w.country || '').toUpperCase() + ':' + cpBankName(rc.bankName) + ':' + acct;
+      // 인도는 은행명 대신 IFSC(은행+지점) — 있으면 키에 넣는다(같은 계좌번호라도 IFSC 가 다르면 다른 계좌).
+      var ifsc = rc.ifsc ? ':' + String(rc.ifsc).toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+      return 'bank:' + String(w.country || '').toUpperCase() + ':' + cpBankName(rc.bankName) + ifsc + ':' + acct;
     }
     return '';
   }
@@ -1480,7 +1482,7 @@
     const first = b.items[0] || {};
     c.appendChild(el('h3', null, '🔗 같은 수취인 ' + b.items.length + '건 — 센트비로 합계 한 번'));
     const badges = el('div', 'cp-badges');
-    const CN = { PH: '🇵🇭 필리핀', ZA: '🇿🇦 남아공', ID: '🇮🇩 인도네시아' };
+    const CN = { PH: '🇵🇭 필리핀', ZA: '🇿🇦 남아공', ID: '🇮🇩 인도네시아', NG: '🇳🇬 나이지리아', VN: '🇻🇳 베트남', US: '🇺🇸 미국', IN: '🇮🇳 인도' };
     badges.appendChild(el('span', 'cp-badge cp-country', (CN[first.country] || first.country || '??') + (first.currency ? ' · ' + first.currency : '')));
     badges.appendChild(el('span', 'cp-badge ' + (first.method === 'gcash' ? 'gcash' : 'bank'), first.method === 'gcash' ? 'GCash' : '🏦 은행'));
     if (b.crossApp) badges.appendChild(el('span', 'cp-badge cp-app', '앱 교차'));
