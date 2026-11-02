@@ -1316,13 +1316,45 @@
     if (loadNotes.length) loadNotes.forEach(t => box.appendChild(el('div', 'warn', t)));
   }
 
+  // 11/03 오너: 센트비는 이름·중간이름·성을 칸별로 받는다 → 이름 필드는 나눠서도 복사.
+  //   규칙: 쉼표가 있으면 "성, 이름". 아니면 마지막 단어 = 성, 단 Dela/De la/Delos/San/Santa… 로 시작하는 성은 그 단어부터 성.
+  //   필리핀 중간이름(엄마 성)은 유저가 따로 안 주므로 비운다 — 앞부분 전부를 이름으로.
+  const SURNAME_PARTICLES = ['dela', 'de', 'del', 'delos', 'des', 'di', 'da', 'dos', 'das', 'du', 'la', 'los', 'las', 'san', 'santa', 'santo', 'sta', 'sta.', 'sto', 'sto.', 'van', 'von', 'bin', 'binti', 'al', 'el', 'mc', 'mac'];
+  function splitName(full) {
+    const s = String(full || '').replace(/\s+/g, ' ').trim();
+    if (!s) return null;
+    if (s.includes(',')) {
+      const [last, rest] = s.split(/,(.*)/s).map(x => (x || '').trim());
+      return last && rest ? { first: rest, last } : null;
+    }
+    const w = s.split(' ');
+    if (w.length < 2) return null;
+    let i = w.length - 1;   // 성 시작 위치
+    while (i - 1 >= 1 && SURNAME_PARTICLES.includes(w[i - 1].toLowerCase())) i--;
+    return { first: w.slice(0, i).join(' '), last: w.slice(i).join(' ') };
+  }
+
   function field(k, label, v) {
     const r = el('div', 'cp-f');
     r.append(el('span', 'k', label), el('span', 'v', v));
     const b = el('button', null, '복사'); b.type = 'button';
     b.onclick = () => copy(v, label);
     r.appendChild(b);
-    return r;
+    if (k !== 'fullName' && k !== 'accountHolder') return r;
+    const sp = splitName(v);
+    if (!sp) return r;
+    const wrap = el('div');
+    wrap.appendChild(r);
+    for (const [lab, val] of [['└ 이름', sp.first], ['└ 성', sp.last]]) {
+      const x = el('div', 'cp-f');
+      x.append(el('span', 'k', lab), el('span', 'v', val));
+      const bx = el('button', null, '복사'); bx.type = 'button';
+      bx.onclick = () => copy(val, lab.replace('└ ', ''));
+      x.appendChild(bx);
+      wrap.appendChild(x);
+    }
+    wrap.appendChild(el('div', 'cp-sub', '중간이름은 비워 두세요'));
+    return wrap;
   }
 
   function card(w) {
