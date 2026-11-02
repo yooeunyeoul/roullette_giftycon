@@ -38,6 +38,10 @@
   · 캐시드릴은 백엔드 이식 중 — 404 면 "준비 중" 으로만 표시. 스위치가 꺼져 데이터가 없어도 빈 목록으로 그린다.
   · 맨 아래 세 번째 스크립트만 #cashMain 을 다룬다(위 두 스크립트와 독립, #toast 만 공유).
   2026-10-29 📱 에어타임 대기 카드에도 같은 risk 배지(rf 4앱·캐시드릴) + 잔액줄에 🟢🟡🔴 요약(🟢 합계 금액). 통신비 전용 신호: 같은 번호 다계정·초대 보상 위주+본인 미활동·초대자 파밍. 표시 전용.
+  2026-11-02 23시 🔗 같은 수취인 묶음(오너 "그냥 묶어줘") — 💵 현금 받기 [🔗 전체 앱] = rf 4앱(GET ?appId=all, 구서버면 앱별 4번) + 캐시드릴 대기를
+    한 화면에. 같은 GCash 번호(09/639 동일)·같은 은행 계좌(나라+은행명+계좌 숫자) 2건 이상 = 묶음 카드(합계·포함 건·수취 복사·이름 다름 경고),
+    [묶음 완료] = 센트비 송금번호 필수 + 확인창 → 건마다 자기 서버·자기 appId 로 /complete 순차, 메모 "묶음 송금: <번호> (n건 합산)",
+    실패 건 표시하고 나머지 계속. 수수료는 건마다 그대로(환불 없음). 앱 하나만 고르면 그 앱 안에서만 묶는다.
 -->
 <style>
   :root { --bg:#0f1115; --card:#181b22; --line:#262a33; --text:#e8eaf0; --muted:#8b93a3; --ok:#22c55e; --bad:#ef4444; --accent:#4f7cff; --amber:#f59e0b; }
@@ -132,6 +136,17 @@
   .cp-panel select, .cp-panel input { width:100%; padding:11px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--text); font-size:15px; }
   .cp-panel .acts { margin-top:0; }
   #cashSum { font-size:14px; }
+  /* 🔗 같은 수취인 묶음(2026-11-02) */
+  .cp-bundle { border:2px solid #8b5cf6; }
+  .cp-bundle h3 { margin:0 0 4px; font-size:13px; color:#c4b5fd; }
+  .cp-badge.cp-app { background:#2b2140; color:#d8ccff; }
+  .cp-badge.cp-warn { background:rgba(245,158,11,.18); color:var(--amber); }
+  .cp-badge.cp-bad { background:rgba(239,68,68,.15); color:var(--bad); }
+  .cp-items { margin:8px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
+  .cp-items li { padding:6px 8px; border-radius:8px; background:#20242d; font-size:13px; word-break:break-all; }
+  .cp-items li .res.ok { color:var(--ok); font-weight:700; } .cp-items li .res.bad { color:var(--bad); font-weight:700; }
+  .cp-bundle details { margin-top:8px; } .cp-bundle summary { color:var(--muted); font-size:13px; padding:6px 0; }
+  .cp-bundle details .card { margin-top:6px; }
 </style>
 </head>
 <body>
@@ -217,6 +232,7 @@
   <!-- 💵 현금 받기 (2026-11-02) — 파일 맨 아래 세 번째 스크립트만 이 영역을 다룬다. -->
   <div id="cashMain" class="hidden">
     <div class="seg" id="cashAppSeg">
+      <button data-cash-app="all">🔗 전체 앱</button>
       <button data-cash-app="cashdrill">캐시드릴</button>
       <button data-cash-app="com.rewardfactory.cashfi" class="on">캐시파이</button>
       <button data-cash-app="com.rewardfactory.cashstep">캐시스텝</button>
@@ -1110,7 +1126,8 @@
   'use strict';
   const BASE = 'https://reward-factory-backend.fly.dev/admin/cash-payout';
   const CD_BASE = 'https://cashdrill-backend.fly.dev/api/v1/settlement/cash-payout';
-  const NAMES = { 'cashdrill': '캐시드릴', 'com.rewardfactory.cashfi': '캐시파이', 'com.rewardfactory.cashstep': '캐시스텝', 'com.rewardfactory.gold': '돈캐드릴', 'com.rewardfactory.wakebox': '웨이크박스' };
+  const NAMES = { 'all': '전체 앱', 'cashdrill': '캐시드릴', 'com.rewardfactory.cashfi': '캐시파이', 'com.rewardfactory.cashstep': '캐시스텝', 'com.rewardfactory.gold': '돈캐드릴', 'com.rewardfactory.wakebox': '웨이크박스' };
+  const RF_APPS = ['com.rewardfactory.cashfi', 'com.rewardfactory.cashstep', 'com.rewardfactory.gold', 'com.rewardfactory.wakebox'];
   const STATUS_NAMES = { PENDING: '대기', COMPLETED: '완료', DENIED: '반려' };
   const REASONS = [
     ['recipient_invalid', '수취 정보 오류(번호·계좌 없음)'],
@@ -1155,17 +1172,23 @@
   let loadSeq = 0;
   let rows = [];   // 지금 화면의 건(처리하면 빠진다 — 요약 재계산용)
   const isCD = () => appId === 'cashdrill';
+  const isAll = () => appId === 'all';
   // 키: 현금 받기 전용 슬롯 → 없으면 같은 백엔드의 출금 정산 키(rf: 캐시파이·캐시스텝·돈캐드릴 / 캐시드릴: 캐시드릴).
+  //   [전체 앱]은 두 키를 다 쓴다(저장 버튼은 rf 슬롯 — 캐시드릴 키는 [캐시드릴]을 골라 저장).
   const keySlot = () => isCD() ? 'settle.key.cash.cashdrill' : 'settle.key.cash';
-  const key = () => isCD()
-    ? (ls('settle.key.cash.cashdrill') || ls('settle.key.cashdrill') || '')
-    : (ls('settle.key.cash') || ls('settle.key.cashfi') || ls('settle.key.cashstep') || ls('settle.key.gold') || '');
+  const keyCd = () => ls('settle.key.cash.cashdrill') || ls('settle.key.cashdrill') || '';
+  const keyRf = () => ls('settle.key.cash') || ls('settle.key.cashfi') || ls('settle.key.cashstep') || ls('settle.key.gold') || '';
+  const key = () => isAll() ? (keyRf() || keyCd()) : isCD() ? keyCd() : keyRf();
   const base = () => isCD() ? CD_BASE : BASE;
+  // 건마다 자기 서버·자기 키·자기 appId 로 처리한다([전체 앱]에서 두 백엔드가 섞인다). load 가 _src 를 붙인다.
+  const rowBase = (w) => w._src === 'cd' ? CD_BASE : BASE;
+  const rowKey = (w) => w._src === 'cd' ? keyCd() : keyRf();
+  const rowApp = (w) => w._src === 'cd' ? 'cashdrill' : (w.appId || appId);
 
-  async function api(url, method, body) {
+  async function api(url, method, body, k) {
     const res = await fetch(url, {
       method: method || 'GET',
-      headers: Object.assign({ 'Authorization': 'Bearer ' + key() }, body ? { 'Content-Type': 'application/json' } : {}),
+      headers: Object.assign({ 'Authorization': 'Bearer ' + (k || key()) }, body ? { 'Content-Type': 'application/json' } : {}),
       body: body ? JSON.stringify(body) : undefined,
     });
     let data = null;
@@ -1231,7 +1254,11 @@
       }
       const blocked = rows.filter(w => w.payoutBlocked === true).length;
       if (blocked) box.appendChild(el('div', 'warn', '⛔ 차단 계정 ' + blocked + '건 — 보내지 마세요'));
+      const bs = cpBundles(rows);
+      if (bs.length) box.appendChild(el('div', null, '🔗 같은 수취인 묶음 ' + bs.length + '개 (' + bs.reduce((a, b) => a + b.items.length, 0) + '건) — 위에서 한 번에'));
+      else if (!isAll()) box.appendChild(el('div', 'cp-sub', '다른 앱에도 같은 수취인이 있을 수 있어요 — [🔗 전체 앱]에서 확인'));
     }
+    if (loadNotes.length) loadNotes.forEach(t => box.appendChild(el('div', 'warn', t)));
   }
 
   function field(k, label, v) {
@@ -1254,6 +1281,7 @@
     const cn = CN[w.country] || ['🌐', w.country || '나라 미상', w.currency || ''];
     badges.appendChild(el('span', 'cp-badge cp-country', cn[0] + ' ' + cn[1] + ' (' + (w.country || '??') + ' · ' + (w.currency || cn[2]) + ')'));
     badges.appendChild(el('span', 'cp-badge ' + method, method === 'gcash' ? 'GCash' : method === 'bank' ? '🏦 은행' : String(w.method || '방법 미상')));
+    if (isAll()) badges.appendChild(el('span', 'cp-badge cp-app', NAMES[rowApp(w)] || rowApp(w)));
     c.appendChild(badges);
 
     // 금액: 실지급액(USD) 크게 + 현지통화 크게, 신청액·수수료는 작게
@@ -1320,9 +1348,9 @@
       go.disabled = cancel.disabled = true;
       c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
       try {
-        const body = { appId: appId };
+        const body = { appId: rowApp(w) };
         if (memo.value.trim()) body.note = memo.value.trim();
-        await api(base() + '/' + encodeURIComponent(w.id) + '/complete', 'POST', body);
+        await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/complete', 'POST', body, rowKey(w));
         collapse(w, c, 'ok', '✅ 완료 기록');
         toast('완료 처리됨');
       } catch (e) {
@@ -1359,7 +1387,7 @@
       go.disabled = cancel.disabled = true;
       c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
       try {
-        const r = await api(base() + '/' + encodeURIComponent(w.id) + '/reject', 'POST', { appId: appId, reason: why, reasonCode: sel.value });
+        const r = await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/reject', 'POST', { appId: rowApp(w), reason: why, reasonCode: sel.value }, rowKey(w));
         collapse(w, c, 'bad', '반려됨 — 캐시 ' + num(r.refunded != null ? r.refunded : refund).toLocaleString('ko-KR') + ' 환불');
         toast('반려 + 환불');
       } catch (e) {
@@ -1383,20 +1411,211 @@
 
   function empty(msg) { $('cashList').replaceChildren(el('div', 'empty', msg)); }
 
+  // ── 같은 수취인 묶음(2026-11-02 23시 오너 "그냥 묶어줘") ──
+  //   같은 GCash 번호 / 같은 은행 계좌(나라+은행명+계좌번호) 대기 건을 한 번에 센트비로 보내고, 건마다 /complete.
+  //   수수료는 건마다 유저 쪽 그대로(환불 없음). settle.html · rf PC 어드민(backend/src/interfaces/admin/cash-payout-bundle.ts 원본) · 캐시드릴 PC 어드민이 **같은 규칙**(복사본)이다.
+  //   GCash: 숫자만 → 639XXXXXXXXX·9XXXXXXXXX 는 09XXXXXXXXX 로. 은행: 나라 + 은행명(소문자·영숫자만·bank/ltd 등 제거) + 계좌 숫자.
+  //   ⚠️ 백슬래시를 쓰지 않는다(TS 템플릿 리터럴 안에 그대로 들어간다).
+  function cpDigits(v) { return String(v == null ? '' : v).replace(/[^0-9]/g, ''); }
+  function cpGcashKey(v) {
+    var d = cpDigits(v);
+    if (d.length === 12 && d.indexOf('63') === 0) d = '0' + d.slice(2);
+    else if (d.length === 10 && d.charAt(0) === '9') d = '0' + d;
+    return d.length >= 10 ? d : '';
+  }
+  var CP_BANK_STOP = { bank: 1, ltd: 1, limited: 1, pt: 1, tbk: 1, persero: 1, the: 1, of: 1, plc: 1, inc: 1, co: 1, sa: 1 };
+  function cpWords(v) {
+    var s = String(v == null ? '' : v);
+    try { s = s.normalize('NFD'); } catch (e) {}
+    return s.toLowerCase().split(/[^a-z0-9]+/).filter(function (t) { return !!t; });
+  }
+  function cpBankName(v) { return cpWords(v).filter(function (t) { return !CP_BANK_STOP[t]; }).join(''); }
+  function cpRecipientKey(w) {
+    var rc = w && w.recipient && typeof w.recipient === 'object' ? w.recipient : {};
+    if (w && w.method === 'gcash') { var g = cpGcashKey(rc.gcashNumber); return g ? 'gcash:' + g : ''; }
+    if (w && w.method === 'bank') {
+      var acct = cpDigits(rc.accountNumber || rc.iban);
+      if (!acct) return '';
+      return 'bank:' + String(w.country || '').toUpperCase() + ':' + cpBankName(rc.bankName) + ':' + acct;
+    }
+    return '';
+  }
+  function cpPersonName(w) {
+    var rc = w && w.recipient && typeof w.recipient === 'object' ? w.recipient : {};
+    return cpWords(rc.fullName || rc.accountHolder || '').sort().join(' ');
+  }
+  /// 대기 건 중 수취인 키가 같은 2건 이상만 묶음. 순서 = 묶음 안 가장 오래된 신청 순.
+  function cpBundles(list) {
+    var by = {}, order = [];
+    (list || []).forEach(function (w) {
+      if (!w || w.status !== 'PENDING') return;
+      var k = cpRecipientKey(w);
+      if (!k) return;
+      if (!by[k]) { by[k] = []; order.push(k); }
+      by[k].push(w);
+    });
+    return order.filter(function (k) { return by[k].length > 1; }).map(function (k) {
+      var items = by[k].slice().sort(function (a, b) { return new Date(a.createdAt || 0) - new Date(b.createdAt || 0); });
+      var net = 0, amount = 0, fee = 0, local = {}, names = {}, apps = {};
+      items.forEach(function (w) {
+        net += Number(w.netCents) || 0; amount += Number(w.amountCents) || 0; fee += Number(w.feeCents) || 0;
+        if (w.currency && w.netLocal != null && isFinite(Number(w.netLocal))) local[w.currency] = Math.round(((local[w.currency] || 0) + Number(w.netLocal)) * 100) / 100;
+        var n = cpPersonName(w); if (n) names[n] = 1;
+        apps[String(w.appId || '')] = 1;
+      });
+      return {
+        key: k, items: items, netCents: net, amountCents: amount, feeCents: fee, local: local,
+        nameMismatch: Object.keys(names).length > 1,
+        crossApp: Object.keys(apps).length > 1,
+        blocked: items.some(function (w) { return w.payoutBlocked === true; })
+      };
+    });
+  }
+  function cpBundleNote(ref, n) { return '묶음 송금: ' + String(ref || '').trim() + ' (' + n + '건 합산)'; }
+
+  // 묶음 카드 — 합계·포함 건·수취 복사·[묶음 완료]. 개별 처리(반려 등)는 접힌 "개별 처리" 안의 종전 카드로.
+  function bundleCard(b) {
+    const c = el('div', 'card cp-bundle');
+    c.dataset.bundle = b.key;
+    const first = b.items[0] || {};
+    c.appendChild(el('h3', null, '🔗 같은 수취인 ' + b.items.length + '건 — 센트비로 합계 한 번'));
+    const badges = el('div', 'cp-badges');
+    const CN = { PH: '🇵🇭 필리핀', ZA: '🇿🇦 남아공', ID: '🇮🇩 인도네시아' };
+    badges.appendChild(el('span', 'cp-badge cp-country', (CN[first.country] || first.country || '??') + (first.currency ? ' · ' + first.currency : '')));
+    badges.appendChild(el('span', 'cp-badge ' + (first.method === 'gcash' ? 'gcash' : 'bank'), first.method === 'gcash' ? 'GCash' : '🏦 은행'));
+    if (b.crossApp) badges.appendChild(el('span', 'cp-badge cp-app', '앱 교차'));
+    if (b.nameMismatch) badges.appendChild(el('span', 'cp-badge cp-warn', '⚠️ 이름 다름 — 확인 후 송금'));
+    if (b.blocked) badges.appendChild(el('span', 'cp-badge cp-bad', '⛔ 차단 계정 포함 — 그 건 반려 후 다시 불러오기'));
+    c.appendChild(badges);
+    const amt = el('div', 'amt', usd(b.netCents)); amt.appendChild(el('small', null, '실지급 합계'));
+    c.appendChild(amt);
+    const locs = Object.keys(b.local).map(cur => local(b.local[cur], cur)).filter(Boolean);
+    if (locs.length) c.appendChild(el('div', 'cp-local', '≈ ' + locs.join(' · ')));
+    c.appendChild(el('div', 'cp-sub', '신청 합계 ' + usd(b.amountCents) + ' − 수수료 ' + usd(b.feeCents) + ' (건마다 그대로 · 환불 없음)'));
+    const ul = el('ul', 'cp-items');
+    const slots = {};
+    b.items.forEach(w => {
+      const rc = w.recipient && typeof w.recipient === 'object' ? w.recipient : {};
+      const li = el('li', null, (NAMES[rowApp(w)] || rowApp(w)) + ' · 신청 ' + usd(w.amountCents) + ' → 실지급 ' + usd(w.netCents)
+        + (w.netLocal != null ? ' (≈ ' + (local(w.netLocal, w.currency) || '') + ')' : '')
+        + ' · ' + (rc.fullName || rc.accountHolder || '이름 없음') + ' · ' + String(w.userId || '').slice(0, 8) + ' · ' + when(w.createdAt)
+        + (w.payoutBlocked === true ? ' · ⛔ 차단' : ''));
+      const res = el('span', 'res'); li.appendChild(document.createTextNode(' ')); li.appendChild(res);
+      slots[String(w.id)] = res;
+      ul.appendChild(li);
+    });
+    c.appendChild(ul);
+    const fields = el('div', 'cp-fields');
+    fields.appendChild(field('amountUsd', '합계 USD', (b.netCents / 100).toFixed(2)));
+    Object.keys(b.local).forEach(cur => fields.appendChild(field('amountLocal', '합계 ' + cur, String(b.local[cur]))));
+    const rc = first.recipient && typeof first.recipient === 'object' ? first.recipient : {};
+    FIELDS.forEach(([k, label]) => { const v = rc[k]; if (v == null || String(v).trim() === '') return; fields.appendChild(field(k, label, String(v))); });
+    c.appendChild(fields);
+    const panel = el('div', 'cp-panel');
+    const ref = el('input'); ref.type = 'text'; ref.placeholder = '센트비 송금번호 (필수)'; ref.maxLength = 200;
+    const acts = el('div', 'acts');
+    const go = el('button', 'ok', '묶음 완료 (' + b.items.length + '건)'); go.type = 'button';
+    go.disabled = b.blocked;
+    go.onclick = () => completeBundle(b, c, go, ref, slots);
+    acts.appendChild(go);
+    panel.append(ref, acts);
+    c.appendChild(panel);
+    const det = el('details');
+    det.appendChild(el('summary', null, '개별 처리(반려 등) — ' + b.items.length + '건'));
+    b.items.forEach(w => { try { det.appendChild(card(w)); } catch (e) { det.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id)); } });
+    c.appendChild(det);
+    return c;
+  }
+
+  async function completeBundle(b, c, go, ref, slots) {
+    if (b.blocked) { alert('차단 계정이 포함된 묶음은 완료할 수 없어요. 그 건을 반려한 뒤 다시 불러오세요.'); return; }
+    const no = ref.value.trim();
+    if (!no) { alert('센트비 송금번호를 입력해 주세요'); ref.focus(); return; }
+    const note = cpBundleNote(no, b.items.length);
+    const lines = b.items.map(w => '· ' + (NAMES[rowApp(w)] || rowApp(w)) + ' ' + usd(w.netCents) + ' (' + String(w.userId || '').slice(0, 8) + ')').join('\n');
+    if (!confirm('센트비로 합계 ' + usd(b.netCents) + ' 을 한 번에 보냈나요?\n\n' + lines
+      + (b.nameMismatch ? '\n\n⚠️ 이름이 서로 다릅니다 — 확인했나요?' : '')
+      + '\n\n메모: ' + note + '\n' + b.items.length + '건 모두 완료로 기록하고 각 유저에게 완료 푸시가 갑니다.')) return;
+    go.disabled = true; ref.disabled = true;
+    const failed = [];
+    for (const w of b.items) {
+      const slot = slots[String(w.id)];
+      if (slot) { slot.className = 'res'; slot.textContent = '처리 중…'; }
+      try {
+        await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/complete', 'POST', { appId: rowApp(w), note: note }, rowKey(w));
+        if (slot) { slot.className = 'res ok'; slot.textContent = '✅ 완료'; }
+        rows = rows.filter(x => x !== w);
+        c.querySelectorAll('details .card').forEach(x => { if (x.dataset.cashId === String(w.id)) x.remove(); });   // 개별 처리 칸에서도 뺀다
+      } catch (e) {
+        failed.push({ w: w, msg: e.message });
+        if (slot) { slot.className = 'res bad'; slot.textContent = '❌ ' + e.message; }
+      }
+    }
+    if (!failed.length) {
+      c.replaceWith(el('div', 'air-row ok', '🔗 ' + usd(b.netCents) + ' · ' + b.items.length + '건 — ✅ 묶음 완료 (' + note + ')'));
+      toast('묶음 완료');
+    } else {
+      alert('묶음 완료 중 실패한 건이 있어요 (' + (b.items.length - failed.length) + '/' + b.items.length + ' 완료):\n\n'
+        + failed.map(f => (NAMES[rowApp(f.w)] || rowApp(f.w)) + ' ' + String(f.w.id).slice(0, 8) + ': ' + f.msg).join('\n')
+        + '\n\n나머지는 완료로 기록됐어요. 실패 건만 남겨 둡니다(같은 번호로 다시 누르면 실패 건만 다시 시도).');
+      b.items = failed.map(f => f.w);
+      go.disabled = false; ref.disabled = false;
+      go.textContent = '실패 건 다시 시도 (' + b.items.length + '건)';
+    }
+    renderSum(null);
+  }
+
+  let loadNotes = [];   // [전체 앱]에서 한쪽 서버를 못 불렀을 때 요약에 띄운다
+  async function fetchRf(st) {
+    try {
+      const r = await api(BASE + '?appId=all&status=' + st, null, null, keyRf());
+      return Array.isArray(r.withdrawals) ? r.withdrawals : [];
+    } catch (e) {
+      if (e.httpStatus !== 400) throw e;
+      // 서버가 아직 appId=all 을 모르면(배포 전) 앱별로 4번.
+      const all = [];
+      for (const a of RF_APPS) {
+        const r = await api(BASE + '?appId=' + encodeURIComponent(a) + '&status=' + st, null, null, keyRf());
+        (Array.isArray(r.withdrawals) ? r.withdrawals : []).forEach(w => all.push(Object.assign({ appId: a }, w)));
+      }
+      return all;
+    }
+  }
+
   async function load() {
     if (!key()) { alert('먼저 정산 키를 저장해 주세요'); $('cashKeyRow').classList.remove('hidden'); return; }
     const btn = $('cashLoadBtn'); btn.disabled = true; btn.textContent = '불러오는 중…';
     const seq = ++loadSeq;
     try {
-      const r = await api(base() + '?appId=' + encodeURIComponent(appId) + '&status=' + status);
+      let list = [];
+      let serverSum = null;
+      loadNotes = [];
+      if (isAll()) {
+        const jobs = [];
+        if (keyRf()) jobs.push(fetchRf(status).then(l => l.map(w => Object.assign({}, w, { _src: 'rf' })), e => { loadNotes.push('rf 4앱 불러오기 실패: ' + e.message); return []; }));
+        else loadNotes.push('rf 정산 키 없음 — 캐시파이·캐시스텝·돈캐드릴·웨이크박스 빠짐');
+        if (keyCd()) jobs.push(api(CD_BASE + '?status=' + status, null, null, keyCd()).then(
+          r => (Array.isArray(r.withdrawals) ? r.withdrawals : []).map(w => Object.assign({}, w, { _src: 'cd', appId: 'cashdrill' })),
+          e => { loadNotes.push('캐시드릴 불러오기 실패: ' + e.message); return []; }));
+        else loadNotes.push('캐시드릴 정산 키 없음 — 캐시드릴 빠짐([캐시드릴]을 골라 키 저장)');
+        (await Promise.all(jobs)).forEach(l => { list = list.concat(l); });
+      } else {
+        const r = await api(base() + '?appId=' + encodeURIComponent(appId) + '&status=' + status);
+        serverSum = r.summary;
+        list = (Array.isArray(r.withdrawals) ? r.withdrawals : []).map(w => Object.assign({}, w, isCD() ? { _src: 'cd', appId: 'cashdrill' } : { _src: 'rf', appId: w.appId || appId }));
+      }
       if (seq !== loadSeq) return;
-      const list = Array.isArray(r.withdrawals) ? r.withdrawals.filter(w => w && w.id != null) : [];
-      // 대기: 오래된 순(먼저 신청한 사람부터). 완료·반려: 서버 순서 그대로.
+      list = list.filter(w => w && w.id != null);
+      // 대기: 오래된 순(먼저 신청한 사람부터). 완료·반려: 서버 순서 그대로(전체 앱이면 최근 순).
       if (status === 'PENDING') list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      else if (isAll()) list.sort((a, b) => new Date(b.processedAt || b.createdAt || 0) - new Date(a.processedAt || a.createdAt || 0));
       rows = list.slice();
-      renderSum(r.summary);
+      renderSum(serverSum);
       const pl = $('cashList'); pl.replaceChildren();
-      list.forEach(w => { try { pl.appendChild(card(w)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id + ' — ' + e.message)); } });
+      const bundles = status === 'PENDING' ? cpBundles(list) : [];
+      const inBundle = new Set();
+      bundles.forEach(b => { b.items.forEach(w => inBundle.add(w)); try { pl.appendChild(bundleCard(b)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '묶음 표시 실패 — ' + e.message)); } });
+      list.filter(w => !inBundle.has(w)).forEach(w => { try { pl.appendChild(card(w)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id + ' — ' + e.message)); } });
       if (!list.length) empty(NAMES[appId] + ' — ' + (status === 'PENDING' ? '대기 건이 없습니다 🎉' : '해당 건이 없습니다'));
     } catch (e) {
       if (seq !== loadSeq) return;
