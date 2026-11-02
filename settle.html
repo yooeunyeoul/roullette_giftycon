@@ -31,6 +31,12 @@
   · 카드에 판단 정보(닉네임·가입일·최근 활동·과거 출금·같은 계좌 다른 유저 수)를 텍스트로만 표시. 옛 send.html(DB 행 복사→QR) 흐름을 대체한다.
   2026-10-19 출금 위험 배지 — 목록 응답 항목의 선택 필드 risk{level,codes,reasons}를 🟢🟡🔴⚪ 배지로 **표시만** 한다(자동 보류·숨김·버튼 비활성 없음), 🟡🔴 탭 = 사유 펼침, 맨 위 요약+필터. risk 없는 옛 서버면 배지·요약 없이 예전과 같다.
   2026-10-30 🟢 배지에도 서버 참고 사유가 있으면 한 줄 표시(예: "초대 품질 정상: 복귀 42%").
+  2026-11-02 💵 현금 받기(GCash·은행) 모드 — rf 백엔드 GET /admin/cash-payout?appId=&status=PENDING|COMPLETED|DENIED ·
+    POST /admin/cash-payout/:id/complete {appId, note?} · POST /:id/reject {appId, reason(필수), reasonCode?}. 정산 키로 전부(서버는 송금 안 함 — 기록만).
+  · 오너가 센트비 앱으로 손 송금 → [완료]. 수취 정보 필드마다 [복사]. 금액은 전부 센트(netCents = 실지급액, netLocal = 현지통화 참고값).
+  · payoutBlocked 면 완료 버튼 비활성(서버도 409 payout_blocked). 반려 = 사유 필수 + 사유 코드, 캐시 환불.
+  · 캐시드릴은 백엔드 이식 중 — 404 면 "준비 중" 으로만 표시. 스위치가 꺼져 데이터가 없어도 빈 목록으로 그린다.
+  · 맨 아래 세 번째 스크립트만 #cashMain 을 다룬다(위 두 스크립트와 독립, #toast 만 공유).
   2026-10-29 📱 에어타임 대기 카드에도 같은 risk 배지(rf 4앱·캐시드릴) + 잔액줄에 🟢🟡🔴 요약(🟢 합계 금액). 통신비 전용 신호: 같은 번호 다계정·초대 보상 위주+본인 미활동·초대자 파밍. 표시 전용.
 -->
 <style>
@@ -107,6 +113,24 @@
   #riskBar button.on { color:var(--text); border-color:var(--text); }
   #pendingList[data-rf="green"] .card:not([data-risk="green"]) { display:none; }
   #pendingList[data-rf="warn"] .card[data-risk="green"] { display:none; }
+  /* 💵 현금 받기(2026-11-02) */
+  #modeSeg button { font-size:13px; }
+  #cashAppSeg { flex-wrap:wrap; } #cashAppSeg button { flex:1 1 30%; }
+  .cp-badges { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
+  .cp-badge { padding:3px 8px; border-radius:6px; background:#20242d; font-size:12px; font-weight:700; }
+  .cp-badge.gcash { background:rgba(79,124,255,.18); color:#9db4ff; }
+  .cp-badge.bank { background:rgba(34,197,94,.14); color:var(--ok); }
+  .cp-local { font-size:18px; font-weight:800; margin-top:2px; color:#ffd479; }
+  .cp-sub { color:var(--muted); font-size:12px; margin-top:2px; }
+  .cp-fields { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+  .cp-f { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; background:#20242d; }
+  .cp-f .k { flex:0 0 78px; color:var(--muted); font-size:12px; }
+  .cp-f .v { flex:1; min-width:0; font-size:15px; font-family:ui-monospace, Menlo, monospace; word-break:break-all; }
+  .cp-f button { flex:0 0 auto; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:#2a2f3a; color:var(--text); font-size:13px; }
+  .cp-panel { margin-top:8px; padding:10px; border-radius:10px; background:#20242d; display:flex; flex-direction:column; gap:8px; }
+  .cp-panel select, .cp-panel input { width:100%; padding:11px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--text); font-size:15px; }
+  .cp-panel .acts { margin-top:0; }
+  #cashSum { font-size:14px; }
 </style>
 </head>
 <body>
@@ -115,6 +139,7 @@
   <div class="seg" id="modeSeg">
     <button data-mode="settle" class="on">💸 출금 정산</button>
     <button data-mode="air">📱 에어타임 승인</button>
+    <button data-mode="cash">💵 현금 받기</button>
   </div>
 
   <div id="settleMain">
@@ -186,6 +211,33 @@
       <button data-air-status="DENIED">거절</button>
     </div>
     <div id="airList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
+  </div>
+
+  <!-- 💵 현금 받기 (2026-11-02) — 파일 맨 아래 세 번째 스크립트만 이 영역을 다룬다. -->
+  <div id="cashMain" class="hidden">
+    <div class="seg" id="cashAppSeg">
+      <button data-cash-app="cashdrill">캐시드릴</button>
+      <button data-cash-app="com.rewardfactory.cashfi" class="on">캐시파이</button>
+      <button data-cash-app="com.rewardfactory.cashstep">캐시스텝</button>
+      <button data-cash-app="com.rewardfactory.gold">돈캐드릴</button>
+      <button data-cash-app="com.rewardfactory.wakebox">웨이크박스</button>
+    </div>
+    <div class="row hidden" id="cashKeyRow">
+      <input type="password" id="cashKeyInput" placeholder="정산 키 (이 폰에만 저장)" autocomplete="off">
+      <button class="btn ghost" id="cashKeySave">저장</button>
+    </div>
+    <div class="row">
+      <button class="btn" id="cashLoadBtn" style="flex:1">현금 받기 불러오기</button>
+      <button class="btn ghost" id="cashKeyEdit" title="키 변경">🔑</button>
+    </div>
+    <p class="note">수취 정보 [복사] → <b>센트비</b> 앱에 붙여넣기 → <b>실지급액</b> 송금 → <b>완료</b>. 보내면 안 되는 건·정보가 틀린 건은 <b>반려</b>(사유 필수, 캐시 환불). <span class="warn">빨간 "차단 계정" 은 보내지 마세요(완료 불가).</span></p>
+    <div class="tabs" id="cashStatusTabs">
+      <button data-cash-status="PENDING" class="on">대기</button>
+      <button data-cash-status="COMPLETED">완료</button>
+      <button data-cash-status="DENIED">반려</button>
+    </div>
+    <div class="air-bal hidden" id="cashSum"></div>
+    <div id="cashList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
   </div>
 
   <div id="toast">복사 완료</div>
@@ -1020,9 +1072,10 @@
   function setMode(m) {
     ls('settle.mode', m);
     document.querySelectorAll('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
-    $('settleMain').classList.toggle('hidden', m === 'air');
+    $('settleMain').classList.toggle('hidden', m !== 'settle');
     $('airMain').classList.toggle('hidden', m !== 'air');
-    $('count').classList.toggle('hidden', m === 'air');
+    $('cashMain').classList.toggle('hidden', m !== 'cash');   // 💵 현금 받기(11/02)
+    $('count').classList.toggle('hidden', m !== 'settle');
   }
 
   document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
@@ -1040,7 +1093,348 @@
   $('airBatchStop').onclick = () => { batchStop = true; $('airBatchStop').disabled = true; toast('지금 건까지만 보내고 멈춥니다'); };
 
   setAirApp(appId);
-  setMode(ls('settle.mode') === 'air' ? 'air' : 'settle');
+  const savedMode = ls('settle.mode');
+  setMode(savedMode === 'air' || savedMode === 'cash' ? savedMode : 'settle');
+})();
+</script>
+<script>
+// ── 💵 현금 받기(GCash·은행) (2026-11-02) ──────────────────────────────────────
+//   위 두 스크립트와 **독립**(공유 상태 없음, #toast 만 빌려 쓴다). 모드 전환은 에어타임 스크립트의 setMode 가 한다.
+//   서버(rf): GET /admin/cash-payout?appId=&status= · POST /:id/complete {appId, note?} · POST /:id/reject {appId, reason, reasonCode?}
+//     전부 settlementAuth(정산 키) — 서버는 돈을 보내지 않는다(오너가 센트비로 손 송금 → 기록만).
+//   캐시드릴: 백엔드 이식 중. 같은 계약을 /api/v1/settlement/cash-payout 에 둔다고 가정(에어타임과 같은 prefix) — 404 면 "준비 중".
+//   ⚠️ 금액은 전부 센트(amountCents·feeCents·netCents). netLocal 은 현지통화 금액(소수 그대로, 시장 환율 참고값).
+//   ⚠️ 스위치가 꺼져 데이터가 없어도(빈 배열·필드 누락·summary 없음) 깨지지 않게 전부 기본값으로 읽는다.
+(function () {
+  'use strict';
+  const BASE = 'https://reward-factory-backend.fly.dev/admin/cash-payout';
+  const CD_BASE = 'https://cashdrill-backend.fly.dev/api/v1/settlement/cash-payout';
+  const NAMES = { 'cashdrill': '캐시드릴', 'com.rewardfactory.cashfi': '캐시파이', 'com.rewardfactory.cashstep': '캐시스텝', 'com.rewardfactory.gold': '돈캐드릴', 'com.rewardfactory.wakebox': '웨이크박스' };
+  const STATUS_NAMES = { PENDING: '대기', COMPLETED: '완료', DENIED: '반려' };
+  const REASONS = [
+    ['recipient_invalid', '수취 정보 오류(번호·계좌 없음)'],
+    ['name_mismatch', '이름 불일치'],
+    ['payout_blocked', '차단 계정'],
+    ['other', '기타'],
+  ];
+  // 수취 정보 필드 — 순서 = 센트비 입력 순서에 가깝게. 값 있는 것만 그린다.
+  const FIELDS = [
+    ['gcashNumber', 'GCash 번호'], ['fullName', '이름'],
+    ['bankName', '은행'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'],
+    ['routingNumber', '라우팅'], ['swiftCode', 'SWIFT'], ['iban', 'IBAN'], ['branchCode', '지점 코드'],
+    ['accountType', '계좌 종류'], ['address', '주소'], ['email', '이메일'],
+  ];
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) { return null; } }
+  const num = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
+  const usd = (c) => '$' + (num(c) / 100).toFixed(2);
+  const when = (t) => t ? new Date(t).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  function local(amount, cur) {
+    if (amount == null || !Number.isFinite(Number(amount))) return null;
+    const n = Number(amount);
+    try { if (cur) return new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n) + ' ' + cur; } catch (_) {}
+    return n.toLocaleString('en-US', { maximumFractionDigits: 2 }) + (cur ? ' ' + cur : '');
+  }
+  let tt;
+  function toast(msg) { const e = $('toast'); e.textContent = msg; e.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => e.classList.remove('show'), 1300); }
+  async function copy(text, label) {
+    try { await navigator.clipboard.writeText(text); toast(label + ' 복사됨'); }
+    catch (_) {
+      const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast(label + ' 복사됨'); } catch (e) { toast('복사 실패'); }
+      ta.remove();
+    }
+  }
+
+  let appId = ls('settle.cash.app') || 'com.rewardfactory.cashfi';
+  if (!NAMES[appId]) appId = 'com.rewardfactory.cashfi';
+  let status = 'PENDING';
+  let loadSeq = 0;
+  let rows = [];   // 지금 화면의 건(처리하면 빠진다 — 요약 재계산용)
+  const isCD = () => appId === 'cashdrill';
+  // 키: 현금 받기 전용 슬롯 → 없으면 같은 백엔드의 출금 정산 키(rf: 캐시파이·캐시스텝·돈캐드릴 / 캐시드릴: 캐시드릴).
+  const keySlot = () => isCD() ? 'settle.key.cash.cashdrill' : 'settle.key.cash';
+  const key = () => isCD()
+    ? (ls('settle.key.cash.cashdrill') || ls('settle.key.cashdrill') || '')
+    : (ls('settle.key.cash') || ls('settle.key.cashfi') || ls('settle.key.cashstep') || ls('settle.key.gold') || '');
+  const base = () => isCD() ? CD_BASE : BASE;
+
+  async function api(url, method, body) {
+    const res = await fetch(url, {
+      method: method || 'GET',
+      headers: Object.assign({ 'Authorization': 'Bearer ' + key() }, body ? { 'Content-Type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    let data = null;
+    try { data = await res.json(); } catch (_) {}
+    const raw = data && (data.error?.message || data.error || data.message);
+    const code = typeof raw === 'string' ? raw : '';
+    const fail = (msg) => { const e = new Error(msg); e.httpStatus = res.status; e.code = code; return e; };
+    if (res.status === 401) throw fail('키가 틀렸어요 (401)');
+    if (res.status === 503) throw fail('서버에 정산 키가 없어요 (503)');
+    if (res.status === 409 && code === 'payout_blocked') throw fail('차단 계정이라 완료할 수 없어요 — 보내지 마세요 (409)');
+    if (res.status === 409) throw fail('이미 처리된 건이에요 — 목록을 다시 불러 주세요 (409)');
+    if (res.status === 400 && code === 'reason_required') throw fail('반려 사유를 입력해 주세요');
+    if (!res.ok) throw fail(code || ('HTTP ' + res.status));
+    return data || {};
+  }
+
+  // ── 🚦 위험 배지 — 위 두 스크립트와 같은 모양·같은 CSS. **표시 전용**. risk 없으면 아무것도 안 그린다.
+  const RISK = { green: '🟢 깨끗', yellow: '🟡 확인', red: '🔴 위험', unknown: '⚪ 계산 실패' };
+  function normRisk(r) {
+    if (!r || typeof r !== 'object' || !RISK[r.level]) return null;
+    return { level: r.level, reasons: Array.isArray(r.reasons) ? r.reasons.filter(x => x != null && x !== '').map(String) : [] };
+  }
+  function riskBadge(r, c) {
+    if (!r) return;
+    c.dataset.risk = r.level;
+    if (r.level === 'red') c.classList.add('risk-red');
+    const canOpen = r.level !== 'green' && r.reasons.length > 0;
+    const b = el(canOpen ? 'button' : 'div', 'risk ' + r.level, RISK[r.level] + (canOpen ? ' · ' + r.reasons.length : ''));
+    const wrap = el('div'); wrap.appendChild(b); c.appendChild(wrap);
+    if (r.level === 'green' && r.reasons.length) wrap.appendChild(el('div', 'risk-note', r.reasons[0]));
+    if (!canOpen) return;
+    b.type = 'button';
+    const chev = el('span', 'chev', '▲'); b.appendChild(chev);
+    const ul = el('ul', 'risk-reasons');   // 건수가 적어 처음부터 펼친다(통신비와 같음)
+    r.reasons.forEach(t => ul.appendChild(el('li', null, t)));
+    c.appendChild(ul);
+    b.onclick = () => { const open = ul.classList.toggle('hidden') === false; chev.textContent = open ? '▲' : '▼'; };
+  }
+
+  function renderSum(serverSum) {
+    const box = $('cashSum'); box.replaceChildren(); box.classList.remove('hidden');
+    // 처리해서 빠진 건이 있으면 서버 요약 대신 화면 기준으로 다시 센다.
+    const s = serverSum && typeof serverSum === 'object' ? serverSum : null;
+    const count = s ? num(s.count) : rows.length;
+    const net = s ? num(s.totalNetCents) : rows.reduce((a, w) => a + num(w.netCents), 0);
+    const fee = s ? num(s.totalFeeCents) : rows.reduce((a, w) => a + num(w.feeCents), 0);
+    box.appendChild(document.createTextNode((STATUS_NAMES[status] || status) + ' '));
+    box.appendChild(el('b', null, count + '건'));
+    box.appendChild(document.createTextNode(' · 실지급 '));
+    box.appendChild(el('b', null, usd(net)));
+    box.appendChild(document.createTextNode(' · 수수료 ' + usd(fee)));
+    // 통화별 현지 합계(센트비에서 통화별로 보낸다)
+    const byCur = {};
+    rows.forEach(w => { if (w.currency && w.netLocal != null && Number.isFinite(Number(w.netLocal))) byCur[w.currency] = (byCur[w.currency] || 0) + Number(w.netLocal); });
+    const cur = Object.keys(byCur).map(c => local(byCur[c], c)).filter(Boolean);
+    if (cur.length) box.appendChild(el('div', 'cp-sub', '현지 합계 ≈ ' + cur.join(' · ')));
+    if (status === 'PENDING') {
+      const rs = rows.map(w => normRisk(w.risk)).filter(Boolean);
+      if (rs.length) {
+        const n = { green: 0, yellow: 0, red: 0, unknown: 0 };
+        rs.forEach(r => n[r.level]++);
+        box.appendChild(el('div', null, '🟢 ' + n.green + ' · 🟡 ' + n.yellow + ' · 🔴 ' + n.red + (n.unknown ? ' · ⚪ ' + n.unknown : '')));
+      }
+      const blocked = rows.filter(w => w.payoutBlocked === true).length;
+      if (blocked) box.appendChild(el('div', 'warn', '⛔ 차단 계정 ' + blocked + '건 — 보내지 마세요'));
+    }
+  }
+
+  function field(k, label, v) {
+    const r = el('div', 'cp-f');
+    r.append(el('span', 'k', label), el('span', 'v', v));
+    const b = el('button', null, '복사'); b.type = 'button';
+    b.onclick = () => copy(v, label);
+    r.appendChild(b);
+    return r;
+  }
+
+  function card(w) {
+    const c = el('div', 'card');
+    c.dataset.cashId = String(w.id);
+    const blocked = w.payoutBlocked === true;
+    if (blocked) c.classList.add('isblocked');
+    const method = w.method === 'gcash' ? 'gcash' : w.method === 'bank' ? 'bank' : '';
+    const badges = el('div', 'cp-badges');
+    badges.appendChild(el('span', 'cp-badge', w.country || '??'));
+    badges.appendChild(el('span', 'cp-badge ' + method, method === 'gcash' ? 'GCash' : method === 'bank' ? '🏦 은행' : String(w.method || '방법 미상')));
+    c.appendChild(badges);
+
+    // 금액: 실지급액(USD) 크게 + 현지통화 크게, 신청액·수수료는 작게
+    const amt = el('div', 'amt', usd(w.netCents));
+    amt.appendChild(el('small', null, '실지급'));
+    c.appendChild(amt);
+    const loc = local(w.netLocal, w.currency);
+    if (loc) c.appendChild(el('div', 'cp-local', '≈ ' + loc));
+    c.appendChild(el('div', 'cp-sub', '신청 ' + usd(w.amountCents) + ' − 수수료 ' + usd(w.feeCents)
+      + (w.cashDeducted != null ? ' · ' + num(w.cashDeducted).toLocaleString('ko-KR') + '캐시' : '')
+      + (loc ? ' · 현지액은 시장 환율 참고값' : '')));
+
+    const fields = el('div', 'cp-fields');
+    fields.appendChild(field('amountUsd', '금액 USD', (num(w.netCents) / 100).toFixed(2)));
+    if (w.netLocal != null && Number.isFinite(Number(w.netLocal))) fields.appendChild(field('amountLocal', '금액 ' + (w.currency || '현지'), String(Number(w.netLocal))));
+    const rc = w.recipient && typeof w.recipient === 'object' ? w.recipient : {};
+    let any = false;
+    FIELDS.forEach(([k, label]) => {
+      const v = rc[k];
+      if (v == null || String(v).trim() === '') return;
+      any = true;
+      fields.appendChild(field(k, label, String(v)));
+    });
+    c.appendChild(fields);
+    if (!any) c.appendChild(el('div', 'warn', '수취 정보가 비어 있어요 — 보내지 말고 반려하세요'));
+
+    if (blocked) c.appendChild(el('div', 'blocked', '⛔ 차단 계정 — 보내지 마세요 (완료 불가)'));
+    if (w.status === 'PENDING') riskBadge(normRisk(w.risk), c);
+    c.appendChild(el('div', 'meta', '신청 ' + when(w.createdAt) + ' · 유저 ' + String(w.userId || '').slice(0, 8)
+      + (w.processedAt ? ' · 처리 ' + when(w.processedAt) : '')));
+    if (w.status === 'DENIED' && w.denialReason) c.appendChild(el('div', 'meta', '반려 코드: ' + w.denialReason));
+    if (w.adminNote) c.appendChild(el('div', 'meta', '메모: ' + w.adminNote));
+
+    if (w.status === 'PENDING') {
+      const acts = el('div', 'acts');
+      const bf = el('button', 'fail', '반려');
+      const bo = el('button', 'ok', blocked ? '완료 🔒' : '완료');
+      bf.type = bo.type = 'button';
+      bo.disabled = blocked;
+      const panel = el('div', 'cp-panel hidden');
+      bo.onclick = () => openComplete(w, c, panel);
+      bf.onclick = () => openReject(w, c, panel);
+      acts.append(bf, bo);
+      c.append(acts, panel);
+    }
+    return c;
+  }
+
+  function summaryLine(w) {
+    return usd(w.netCents) + (w.netLocal != null ? ' (' + (local(w.netLocal, w.currency) || '') + ')' : '') + ' · ' + (w.country || '??') + ' · '
+      + (w.method === 'gcash' ? 'GCash ' + ((w.recipient || {}).gcashNumber || '') : '은행 ' + ((w.recipient || {}).accountNumber || ''));
+  }
+
+  function openComplete(w, c, panel) {
+    if (w.payoutBlocked === true) { alert('차단 계정이라 완료할 수 없어요. 보내지 마세요.'); return; }
+    panel.replaceChildren(); panel.classList.remove('hidden');
+    const memo = el('input'); memo.type = 'text'; memo.placeholder = '메모 (선택 · 예: 센트비 거래번호)'; memo.maxLength = 500;
+    const acts = el('div', 'acts');
+    const cancel = el('button', 'restore', '닫기'); cancel.type = 'button';
+    const go = el('button', 'ok', '완료 확정'); go.type = 'button';
+    cancel.onclick = () => panel.classList.add('hidden');
+    go.onclick = async () => {
+      if (!confirm('센트비로 송금을 끝냈나요?\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 완료 푸시가 갑니다.')) return;
+      go.disabled = cancel.disabled = true;
+      c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
+      try {
+        const body = { appId: appId };
+        if (memo.value.trim()) body.note = memo.value.trim();
+        await api(base() + '/' + encodeURIComponent(w.id) + '/complete', 'POST', body);
+        collapse(w, c, 'ok', '✅ 완료 기록');
+        toast('완료 처리됨');
+      } catch (e) {
+        alert('완료 실패: ' + e.message);
+        go.disabled = cancel.disabled = false;
+        c.querySelectorAll('.acts .fail').forEach(b => b.disabled = false);
+        c.querySelectorAll('.acts .ok').forEach(b => b.disabled = w.payoutBlocked === true || e.code === 'payout_blocked');
+        if (e.httpStatus === 409 && e.code !== 'payout_blocked') load();
+      }
+    };
+    acts.append(cancel, go);
+    panel.append(memo, acts);
+    memo.focus();
+  }
+
+  function openReject(w, c, panel) {
+    panel.replaceChildren(); panel.classList.remove('hidden');
+    const sel = el('select');
+    REASONS.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; sel.appendChild(o); });
+    if (w.payoutBlocked === true) sel.value = 'payout_blocked';
+    const reason = el('input'); reason.type = 'text'; reason.placeholder = '반려 사유 (필수 · 유저에겐 코드만 감)'; reason.maxLength = 500;
+    const refund = num(w.cashDeducted);
+    const note = el('div', 'warn', '반려하면 캐시 ' + refund.toLocaleString('ko-KR') + ' 이 유저에게 환불됩니다.');
+    note.style.fontSize = '12px';
+    const acts = el('div', 'acts');
+    const cancel = el('button', 'restore', '닫기'); cancel.type = 'button';
+    const go = el('button', 'fail', '반려 확정 (환불)'); go.type = 'button';
+    cancel.onclick = () => panel.classList.add('hidden');
+    go.onclick = async () => {
+      const why = reason.value.trim();
+      if (!why) { alert('반려 사유를 입력해 주세요'); reason.focus(); return; }
+      const label = (REASONS.find(r => r[0] === sel.value) || [, sel.value])[1];
+      if (!confirm('반려할까요?\n\n' + summaryLine(w) + '\n코드: ' + label + '\n사유: ' + why + '\n\n캐시 ' + refund.toLocaleString('ko-KR') + ' 이 환불됩니다.')) return;
+      go.disabled = cancel.disabled = true;
+      c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
+      try {
+        const r = await api(base() + '/' + encodeURIComponent(w.id) + '/reject', 'POST', { appId: appId, reason: why, reasonCode: sel.value });
+        collapse(w, c, 'bad', '반려됨 — 캐시 ' + num(r.refunded != null ? r.refunded : refund).toLocaleString('ko-KR') + ' 환불');
+        toast('반려 + 환불');
+      } catch (e) {
+        alert('반려 실패: ' + e.message);
+        go.disabled = cancel.disabled = false;
+        c.querySelectorAll('.acts .fail').forEach(b => b.disabled = false);
+        c.querySelectorAll('.acts .ok').forEach(b => b.disabled = w.payoutBlocked === true);
+        if (e.httpStatus === 409) load();
+      }
+    };
+    acts.append(cancel, go);
+    panel.append(sel, reason, note, acts);
+    reason.focus();
+  }
+
+  function collapse(w, c, cls, text) {
+    c.replaceWith(el('div', 'air-row ' + cls, summaryLine(w) + ' — ' + text));
+    rows = rows.filter(x => x.id !== w.id);
+    renderSum(null);
+  }
+
+  function empty(msg) { $('cashList').replaceChildren(el('div', 'empty', msg)); }
+
+  async function load() {
+    if (!key()) { alert('먼저 정산 키를 저장해 주세요'); $('cashKeyRow').classList.remove('hidden'); return; }
+    const btn = $('cashLoadBtn'); btn.disabled = true; btn.textContent = '불러오는 중…';
+    const seq = ++loadSeq;
+    try {
+      const r = await api(base() + '?appId=' + encodeURIComponent(appId) + '&status=' + status);
+      if (seq !== loadSeq) return;
+      const list = Array.isArray(r.withdrawals) ? r.withdrawals.filter(w => w && w.id != null) : [];
+      // 대기: 오래된 순(먼저 신청한 사람부터). 완료·반려: 서버 순서 그대로.
+      if (status === 'PENDING') list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      rows = list.slice();
+      renderSum(r.summary);
+      const pl = $('cashList'); pl.replaceChildren();
+      list.forEach(w => { try { pl.appendChild(card(w)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id + ' — ' + e.message)); } });
+      if (!list.length) empty(NAMES[appId] + ' — ' + (status === 'PENDING' ? '대기 건이 없습니다 🎉' : '해당 건이 없습니다'));
+    } catch (e) {
+      if (seq !== loadSeq) return;
+      rows = []; $('cashSum').classList.add('hidden');
+      // 캐시드릴(이식 중) 또는 아직 배포 안 된 서버 → 404 는 오류가 아니라 "준비 중".
+      if (e.httpStatus === 404 && !e.code) empty(NAMES[appId] + ' — 현금 받기 준비 중이에요(서버 미연결)');
+      else if (e.httpStatus === 404) empty(NAMES[appId] + ' — 현금 받기 준비 중이에요 (' + e.code + ')');
+      else if (e instanceof TypeError && isCD()) empty(NAMES[appId] + ' — 현금 받기 준비 중이에요(서버 미연결)');
+      else { empty('불러오기 실패: ' + e.message); alert('불러오기 실패: ' + e.message); }
+    } finally {
+      if (seq === loadSeq) { btn.disabled = false; btn.textContent = '현금 받기 불러오기'; }
+    }
+  }
+
+  function setApp(a) {
+    appId = a; ls('settle.cash.app', a);
+    loadSeq++; rows = [];
+    const btn = $('cashLoadBtn'); btn.disabled = false; btn.textContent = '현금 받기 불러오기';
+    $('cashKeyInput').placeholder = a === 'cashdrill' ? '캐시드릴 정산 키 (이 폰에만 저장)' : '정산 키 (이 폰에만 저장)';
+    document.querySelectorAll('#cashAppSeg button').forEach(b => b.classList.toggle('on', b.dataset.cashApp === a));
+    $('cashSum').classList.add('hidden');
+    empty(NAMES[a] + ' — 불러오기를 눌러 주세요');
+  }
+  function setStatus(s) {
+    status = s;
+    document.querySelectorAll('#cashStatusTabs button').forEach(b => b.classList.toggle('on', b.dataset.cashStatus === s));
+    if (key()) load(); else { $('cashSum').classList.add('hidden'); empty('불러오기를 눌러 주세요'); }
+  }
+
+  document.querySelectorAll('#cashAppSeg button').forEach(b => b.onclick = () => setApp(b.dataset.cashApp));
+  document.querySelectorAll('#cashStatusTabs button').forEach(b => b.onclick = () => setStatus(b.dataset.cashStatus));
+  $('cashKeySave').onclick = () => {
+    const v = $('cashKeyInput').value.trim();
+    if (!v) { alert('키를 입력해 주세요'); return; }
+    ls(keySlot(), v);
+    $('cashKeyInput').value = ''; $('cashKeyRow').classList.add('hidden'); toast((isCD() ? '캐시드릴 ' : '') + '키 저장됨');
+  };
+  $('cashKeyEdit').onclick = () => { $('cashKeyRow').classList.toggle('hidden'); $('cashKeyInput').focus(); };
+  $('cashLoadBtn').onclick = () => load();
+
+  setApp(appId);
 })();
 </script>
 </body>
