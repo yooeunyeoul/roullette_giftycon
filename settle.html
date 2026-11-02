@@ -119,6 +119,7 @@
   .cp-badges { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:6px; }
   .cp-badge { padding:3px 8px; border-radius:6px; background:#20242d; font-size:12px; font-weight:700; }
   .cp-badge.gcash { background:rgba(79,124,255,.18); color:#9db4ff; }
+  .cp-badge.cp-country { font-size:15px; padding:5px 10px; background:#2b3140; color:#fff; }
   .cp-badge.bank { background:rgba(34,197,94,.14); color:var(--ok); }
   .cp-local { font-size:18px; font-weight:800; margin-top:2px; color:#ffd479; }
   .cp-sub { color:var(--muted); font-size:12px; margin-top:2px; }
@@ -1249,7 +1250,9 @@
     if (blocked) c.classList.add('isblocked');
     const method = w.method === 'gcash' ? 'gcash' : w.method === 'bank' ? 'bank' : '';
     const badges = el('div', 'cp-badges');
-    badges.appendChild(el('span', 'cp-badge', w.country || '??'));
+    const CN = { PH: ['🇵🇭', '필리핀', 'PHP'], ZA: ['🇿🇦', '남아공', 'ZAR'], ID: ['🇮🇩', '인도네시아', 'IDR'], NG: ['🇳🇬', '나이지리아', 'NGN'], VN: ['🇻🇳', '베트남', 'VND'], US: ['🇺🇸', '미국', 'USD'] };
+    const cn = CN[w.country] || ['🌐', w.country || '나라 미상', w.currency || ''];
+    badges.appendChild(el('span', 'cp-badge cp-country', cn[0] + ' ' + cn[1] + ' (' + (w.country || '??') + ' · ' + (w.currency || cn[2]) + ')'));
     badges.appendChild(el('span', 'cp-badge ' + method, method === 'gcash' ? 'GCash' : method === 'bank' ? '🏦 은행' : String(w.method || '방법 미상')));
     c.appendChild(badges);
 
