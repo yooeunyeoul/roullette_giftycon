@@ -42,6 +42,8 @@
     한 화면에. 같은 GCash 번호(09/639 동일)·같은 은행 계좌(나라+은행명+계좌 숫자) 2건 이상 = 묶음 카드(합계·포함 건·수취 복사·이름 다름 경고),
     [묶음 완료] = 센트비 송금번호 필수 + 확인창 → 건마다 자기 서버·자기 appId 로 /complete 순차, 메모 "묶음 송금: <번호> (n건 합산)",
     실패 건 표시하고 나머지 계속. 수수료는 건마다 그대로(환불 없음). 앱 하나만 고르면 그 앱 안에서만 묶는다.
+  2026-11-03 📤 송금 보냄 — 💵 현금 대기 카드. 센트비로 보낸 직후 [📤 송금 보냄] → POST cash-payout/:id/sent {appId, sent?}(푸시 없음, 상태는 대기 그대로·앱은 '처리 중').
+    입금 확인 뒤 [완료](이때만 완료 푸시). 보낸 건은 목록 아래 '송금 보냄' 구역으로, 🚫 차단+반려는 숨긴다(이미 돈이 나갔다).
   2026-11-03 🚫 차단+반려 — 📱 통신비·💵 현금 대기 카드(전 건, 🔴 카드는 진한 빨강). 위험 사유를 보여 주는 확인창 → POST <airtime|cash-payout>/:id/block-reject {appId}
     (rf /admin/…, 캐시드릴 /api/v1/settlement/…, 정산 키). 서버가 유저 출금 차단 + 이 건 반려·환불 + 그 유저의 다른 대기 통신비·현금·페이팔 반려·환불(멱등).
     성공하면 그 유저 카드를 빼고 건수 토스트. 🔴 자동 차단은 안 한다(오탐). 기존 [반려]/[거절](번호 오류 등)은 그대로 — 차단 없음.
@@ -93,6 +95,11 @@
   .acts .ppchk { background:#8a4b14; }
   /* 🚫 차단+반려(11/03) — 평소엔 붉은 테두리, 🔴 카드에선 꽉 찬 진한 빨강 */
   .acts.blk-row { margin-top:6px; }
+  .acts .sent { background:#1d4ed8; color:#fff; }
+  .acts .unsent { background:transparent; border:1px solid #3b82f6; color:#9db4ff; }
+  .card.issent { border-color:#3b82f6; }
+  .cp-sentbar { margin:8px 0 4px; padding:8px 10px; border-radius:8px; background:rgba(59,130,246,.15); color:#bcd0ff; font-size:13px; font-weight:700; }
+  .cp-divider { margin:18px 0 8px; padding:8px 10px; border-radius:8px; background:#1e293b; color:#bcd0ff; font-weight:800; }
   .acts .blk { background:transparent; border:1px solid var(--bad); color:var(--bad); padding:10px; font-size:14px; }
   .acts .blk.strong { background:#991b1b; color:#fff; padding:13px; font-size:15px; }
   /* 📱 에어타임 승인(2026-10-18) */
@@ -1308,6 +1315,8 @@
         rs.forEach(r => n[r.level]++);
         box.appendChild(el('div', null, '🟢 ' + n.green + ' · 🟡 ' + n.yellow + ' · 🔴 ' + n.red + (n.unknown ? ' · ⚪ ' + n.unknown : '')));
       }
+      const sentN = rows.filter(w => !!w.sentAt).length;
+      if (sentN) box.appendChild(el('div', null, '📤 송금 보냄(입금 확인 대기) ' + sentN + '건 · 아직 안 보냄 ' + (rows.length - sentN) + '건'));
       const blocked = rows.filter(w => w.payoutBlocked === true).length;
       if (blocked) box.appendChild(el('div', 'warn', '⛔ 차단 계정 ' + blocked + '건 — 보내지 마세요'));
       const bs = cpBundles(rows);
@@ -1416,22 +1425,37 @@
     if (w.adminNote) c.appendChild(el('div', 'meta', '메모: ' + w.adminNote));
 
     if (w.status === 'PENDING') {
+      const sent = !!w.sentAt;
+      if (sent) {
+        c.classList.add('issent');
+        c.appendChild(el('div', 'cp-sentbar', '📤 송금 보냄 · ' + when(w.sentAt) + ' — 입금이 확인되면 [완료] (그때 유저에게 완료 푸시)'));
+      }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '반려');
-      const bo = el('button', 'ok', blocked ? '완료 🔒' : '완료');
+      const bo = el('button', 'ok', blocked ? '완료 🔒' : sent ? '완료 (입금 확인)' : '완료');
       bf.type = bo.type = 'button';
       bo.disabled = blocked;
       const panel = el('div', 'cp-panel hidden');
       bo.onclick = () => openComplete(w, c, panel);
       bf.onclick = () => openReject(w, c, panel);
-      acts.append(bf, bo);
+      // 📤 송금 보냄(11/03) — 센트비로 보낸 직후 누른다. 푸시 없음·되돌릴 수 있음. 보낸 건은 [보냄 취소].
+      const bs = el('button', sent ? 'unsent' : 'sent', sent ? '보냄 취소' : '📤 송금 보냄');
+      bs.type = 'button';
+      bs.disabled = blocked && !sent;
+      bs.onclick = () => markSent(w, c, !sent);
+      acts.append(bf, bs, bo);
+      c.append(acts);
       // 🚫 차단+반려(11/03) — 위험 사유를 읽고 오너가 누른다(🔴 자동 차단 없음). [반려]는 수취 정보 오류 등 차단 없이 반려.
-      const r0 = normRisk(w.risk);
-      const bx = el('button', 'blk' + (r0 && r0.level === 'red' ? ' strong' : ''), '🚫 차단+반려');
-      bx.type = 'button';
-      bx.onclick = () => blockReject(w, c, bx);
-      const row2 = el('div', 'acts blk-row'); row2.appendChild(bx);
-      c.append(acts, row2, panel);
+      //   이미 보낸 건엔 숨긴다 — 돈이 나간 건을 차단 반려하면 환불까지 돼 이중 지급이 된다(11/03 오클릭 사고).
+      if (!sent) {
+        const r0 = normRisk(w.risk);
+        const bx = el('button', 'blk' + (r0 && r0.level === 'red' ? ' strong' : ''), '🚫 차단+반려');
+        bx.type = 'button';
+        bx.onclick = () => blockReject(w, c, bx);
+        const row2 = el('div', 'acts blk-row'); row2.appendChild(bx);
+        c.append(row2);
+      }
+      c.append(panel);
     }
     return c;
   }
@@ -1474,6 +1498,24 @@
     }
   }
 
+  // ── 📤 송금 보냄(2026-11-03) ── POST .../cash-payout/:id/sent { appId, sent } — 푸시 없음, 상태는 대기 그대로.
+  async function markSent(w, c, sent) {
+    const btns = c.querySelectorAll('.acts button'); btns.forEach(b => b.disabled = true);
+    try {
+      const res = await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/sent', 'POST', { appId: rowApp(w), sent: sent }, rowKey(w));
+      w.sentAt = sent ? (res.sentAt || new Date().toISOString()) : null;
+      rows.forEach(x => { if (x.id === w.id && x._src === w._src) x.sentAt = w.sentAt; });
+      c.replaceWith(card(w));
+      renderSum(null);
+      toast(sent ? '📤 송금 보냄 기록 (유저 알림 없음)' : '보냄 취소');
+    } catch (e) {
+      alert((sent ? '송금 보냄' : '보냄 취소') + ' 실패: ' + e.message + (e.httpStatus === 404 ? '\n(서버가 아직 이 기능을 모를 수 있어요)' : ''));
+      btns.forEach(b => b.disabled = false);
+      c.querySelectorAll('.acts .ok').forEach(b => b.disabled = w.payoutBlocked === true);
+      if (e.httpStatus === 409) load();
+    }
+  }
+
   function summaryLine(w) {
     return usd(w.netCents) + (w.netLocal != null ? ' (' + (local(w.netLocal, w.currency) || '') + ')' : '') + ' · ' + (w.country || '??') + ' · '
       + (w.method === 'gcash' ? 'GCash ' + ((w.recipient || {}).gcashNumber || '') : '은행 ' + ((w.recipient || {}).accountNumber || ''));
@@ -1488,7 +1530,7 @@
     const go = el('button', 'ok', '완료 확정'); go.type = 'button';
     cancel.onclick = () => panel.classList.add('hidden');
     go.onclick = async () => {
-      if (!confirm('센트비로 송금을 끝냈나요?\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 완료 푸시가 갑니다.')) return;
+      if (!confirm((w.sentAt ? '입금이 확인됐나요?' : '센트비로 송금을 끝냈나요?') + '\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.' + (w.sentAt ? '' : '\n(아직 입금 전이면 [📤 송금 보냄]을 먼저 누르세요)'))) return;
       go.disabled = cancel.disabled = true;
       c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
       try {
@@ -1753,7 +1795,9 @@
       if (seq !== loadSeq) return;
       list = list.filter(w => w && w.id != null);
       // 대기: 오래된 순(먼저 신청한 사람부터). 완료·반려: 서버 순서 그대로(전체 앱이면 최근 순).
-      if (status === 'PENDING') list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+      //   11/03: 대기 중 '송금 보냄' 건은 맨 아래 구역(보낸 순) — 위에는 아직 보낼 건만.
+      if (status === 'PENDING') list.sort((a, b) => (!!a.sentAt - !!b.sentAt)
+        || (a.sentAt && b.sentAt ? new Date(a.sentAt) - new Date(b.sentAt) : new Date(a.createdAt || 0) - new Date(b.createdAt || 0)));
       else if (isAll()) list.sort((a, b) => new Date(b.processedAt || b.createdAt || 0) - new Date(a.processedAt || a.createdAt || 0));
       rows = list.slice();
       renderSum(serverSum);
@@ -1761,7 +1805,12 @@
       const bundles = status === 'PENDING' ? cpBundles(list) : [];
       const inBundle = new Set();
       bundles.forEach(b => { b.items.forEach(w => inBundle.add(w)); try { pl.appendChild(bundleCard(b)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '묶음 표시 실패 — ' + e.message)); } });
-      list.filter(w => !inBundle.has(w)).forEach(w => { try { pl.appendChild(card(w)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id + ' — ' + e.message)); } });
+      let divided = false;
+      const sentTotal = list.filter(w => !inBundle.has(w) && w.sentAt).length;
+      list.filter(w => !inBundle.has(w)).forEach(w => {
+        if (status === 'PENDING' && w.sentAt && !divided) { divided = true; pl.appendChild(el('div', 'cp-divider', '📤 송금 보냄 — 입금 확인 대기 ' + sentTotal + '건 (확인되면 [완료])')); }
+        try { pl.appendChild(card(w)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id + ' — ' + e.message)); }
+      });
       if (!list.length) empty(NAMES[appId] + ' — ' + (status === 'PENDING' ? '대기 건이 없습니다 🎉' : '해당 건이 없습니다'));
     } catch (e) {
       if (seq !== loadSeq) return;
