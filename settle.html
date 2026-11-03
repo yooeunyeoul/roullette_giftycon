@@ -1192,7 +1192,8 @@
   ];
   // 수취 정보 필드 — 순서 = 센트비 입력 순서에 가깝게. 값 있는 것만 그린다.
   const FIELDS = [
-    ['gcashNumber', 'GCash 번호'], ['fullName', '이름'],
+    // 11/03: 새 앱은 이름/성을 따로 받는다(firstName·lastName) — 있으면 그대로 복사(추측 없음), 서버가 채운 합친 칸은 숨긴다(skipField).
+    ['gcashNumber', 'GCash 번호'], ['firstName', '이름 (First)'], ['lastName', '성 (Last)'], ['fullName', '이름'],
     ['bankName', '은행'], ['ifsc', 'IFSC'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'], ['phoneNumber', '휴대폰'],
     ['routingNumber', '라우팅'], ['swiftCode', 'SWIFT'], ['iban', 'IBAN'], ['branchCode', '지점 코드'],
     ['accountType', '계좌 종류'], ['address', '주소'], ['email', '이메일'],
@@ -1334,12 +1335,24 @@
     return { first: w.slice(0, i).join(' '), last: w.slice(i).join(' ') };
   }
 
+  /// 이름/성이 따로 있으면 합친 한 칸(fullName·accountHolder = "이름 성")은 중복이라 안 그린다. 옛 건(한 칸만)은 splitName 추측 그대로.
+  function skipField(rc, k) {
+    return (k === 'fullName' || k === 'accountHolder') && !!(rc && rc.firstName && rc.lastName);
+  }
+
   function field(k, label, v) {
     const r = el('div', 'cp-f');
     r.append(el('span', 'k', label), el('span', 'v', v));
     const b = el('button', null, '복사'); b.type = 'button';
     b.onclick = () => copy(v, label);
     r.appendChild(b);
+    // 유저가 직접 나눠 준 성 — 추측 없이 그대로, 중간이름 안내만.
+    if (k === 'lastName') {
+      const wrap = el('div');
+      wrap.appendChild(r);
+      wrap.appendChild(el('div', 'cp-sub', '중간이름은 비워 두세요 (유저가 이름 칸에 함께 적었을 수 있어요)'));
+      return wrap;
+    }
     if (k !== 'fullName' && k !== 'accountHolder') return r;
     const sp = splitName(v);
     if (!sp) return r;
@@ -1388,7 +1401,7 @@
     let any = false;
     FIELDS.forEach(([k, label]) => {
       const v = rc[k];
-      if (v == null || String(v).trim() === '') return;
+      if (skipField(rc, k) || v == null || String(v).trim() === '') return;
       any = true;
       fields.appendChild(field(k, label, String(v)));
     });
@@ -1642,7 +1655,7 @@
     fields.appendChild(field('amountUsd', '합계 USD', (b.netCents / 100).toFixed(2)));
     Object.keys(b.local).forEach(cur => fields.appendChild(field('amountLocal', '합계 ' + cur, String(b.local[cur]))));
     const rc = first.recipient && typeof first.recipient === 'object' ? first.recipient : {};
-    FIELDS.forEach(([k, label]) => { const v = rc[k]; if (v == null || String(v).trim() === '') return; fields.appendChild(field(k, label, String(v))); });
+    FIELDS.forEach(([k, label]) => { const v = rc[k]; if (skipField(rc, k) || v == null || String(v).trim() === '') return; fields.appendChild(field(k, label, String(v))); });
     c.appendChild(fields);
     const panel = el('div', 'cp-panel');
     const ref = el('input'); ref.type = 'text'; ref.placeholder = '센트비 송금번호 (필수)'; ref.maxLength = 200;
