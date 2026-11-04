@@ -157,6 +157,9 @@
   .cp-badge.cp-app { background:#2b2140; color:#d8ccff; }
   .cp-badge.cp-warn { background:rgba(245,158,11,.18); color:var(--amber); }
   .cp-badge.cp-bad { background:rgba(239,68,68,.15); color:var(--bad); }
+  .cp-hist { margin-top:8px; padding:8px 10px; border-radius:8px; background:#1a1e26; font-size:12px; line-height:1.55; color:var(--muted); }
+  .cp-hist-warn { color:var(--amber); font-weight:700; margin-bottom:2px; }
+  .cp-hist-h { color:#cfd5e2; font-weight:700; }
   .cp-items { margin:8px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
   .cp-items li { padding:6px 8px; border-radius:8px; background:#20242d; font-size:13px; word-break:break-all; }
   .cp-items li .res.ok { color:var(--ok); font-weight:700; } .cp-items li .res.bad { color:var(--bad); font-weight:700; }
@@ -1452,6 +1455,16 @@
     });
     c.appendChild(fields);
     if (!any) c.appendChild(el('div', 'warn', '수취 정보가 비어 있어요 — 보내지 말고 반려하세요'));
+    // 11/04 오너: 같은 사람 세 번째 신청을 이미 보낸 건으로 착각 → 이름 중복 배지·같은 번호 건수·이 유저 이전 신청.
+    if (w.nameDuplicated === true) c.appendChild(el('div', 'cp-badge cp-warn', '이름 중복 입력 의심 — 센트비엔 이름을 한 번만'));
+    // 같은 번호 대기 건(지금 불러온 목록 — [전체 앱]이면 캐시드릴·rf 두 백엔드 합산): 따로 보내면 수수료가 두 번 나간다.
+    if (w.status === 'PENDING') {
+      const k = cpRecipientKey(w);
+      const others = k ? rows.filter(o => o !== w && o.status === 'PENDING' && cpRecipientKey(o) === k) : [];
+      if (others.length) c.appendChild(el('div', 'cp-hist-warn', '🔗 같은 번호 대기 ' + others.length + '건 더 (' + [...new Set(others.map(o => NAMES[rowApp(o)] || rowApp(o)))].join(', ') + ') — 묶어서 한 번에 보내면 수수료 한 번'));
+    }
+    const hist = cpHistoryBox(w);
+    if (hist) c.appendChild(hist);
 
     if (blocked) c.appendChild(el('div', 'blocked', '⛔ 차단 계정 — 보내지 마세요 (완료 불가)'));
     if (w.status === 'PENDING') riskBadge(normRisk(w.risk), c);
@@ -1557,6 +1570,34 @@
       + (w.method === 'gcash' ? 'GCash ' + ((w.recipient || {}).gcashNumber || '') : '은행 ' + ((w.recipient || {}).accountNumber || ''));
   }
 
+  // ── 11/04 이력 표시·'송금 보냄' 전 완료 경고 ──
+  const CP_ST_KO = { PENDING: '대기', COMPLETED: '완료', DENIED: '반려' };
+  const cpDay = (t) => { if (!t) return ''; const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate(); };
+  function cpHistLines(w) {
+    const h = Array.isArray(w.recentHistory) ? w.recentHistory : [];
+    return h.map(x => cpDay(x.createdAt) + ' 신청 · ' + usd(x.netCents) + ' · ' + (CP_ST_KO[x.status] || x.status)
+      + (x.status === 'PENDING' ? (x.sentAt ? ' · 보냄 ' + cpDay(x.sentAt) : ' · 보냄 전') : (x.processedAt ? ' ' + cpDay(x.processedAt) : ''))
+      + (x.sameRecipient ? '' : ' · 다른 번호'));
+  }
+  function cpHistoryBox(w) {
+    const lines = cpHistLines(w); const n = num(w.sameRecipient30d);
+    if (!lines.length && !n) return null;
+    const box = el('div', 'cp-hist');
+    if (n) box.appendChild(el('div', 'cp-hist-warn', '⚠️ 같은 번호로 최근 30일 ' + n + '건 — 이번 신청이 맞는지 확인'));
+    if (lines.length) { box.appendChild(el('div', 'cp-hist-h', '이 유저 이전 신청')); lines.forEach(t => box.appendChild(el('div', null, t))); }
+    return box;
+  }
+  function cpNotSentWarn(w) {
+    if (w.status !== 'PENDING' || w.sentAt) return '';
+    const rc = w.recipient || {};
+    const name = [rc.firstName, rc.lastName].filter(Boolean).join(' ') || rc.fullName || rc.accountHolder || '';
+    const lines = cpHistLines(w);
+    return "⚠️ 아직 '송금 보냄' 처리가 안 된 건이에요. 센트비로 실제로 보냈나요?\n\n" + summaryLine(w) + '\n이름: ' + name
+      + (num(w.sameRecipient30d) ? '\n같은 번호로 최근 30일 ' + w.sameRecipient30d + '건 — 이전 건과 헷갈리지 않았는지 확인하세요.' : '')
+      + (lines.length ? '\n\n이 유저 이전 신청:\n· ' + lines.join('\n· ') : '')
+      + '\n\n확인을 누르면 완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.';
+  }
+
   function openComplete(w, c, panel) {
     if (w.payoutBlocked === true) { alert('차단 계정이라 완료할 수 없어요. 보내지 마세요.'); return; }
     panel.replaceChildren(); panel.classList.remove('hidden');
@@ -1566,7 +1607,8 @@
     const go = el('button', 'ok', '완료 확정'); go.type = 'button';
     cancel.onclick = () => panel.classList.add('hidden');
     go.onclick = async () => {
-      if (!confirm(window.__holdWarn(normRisk(w.risk)) + (w.sentAt ? '입금이 확인됐나요?' : '센트비로 송금을 끝냈나요?') + '\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.' + (w.sentAt ? '' : '\n(아직 입금 전이면 [📤 송금 보냄]을 먼저 누르세요)'))) return;
+      const notSent = cpNotSentWarn(w);
+      if (!confirm(window.__holdWarn(normRisk(w.risk)) + (notSent || ('입금이 확인됐나요?\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.')))) return;
       go.disabled = cancel.disabled = true;
       c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
       try {
@@ -1887,6 +1929,9 @@
   $('cashKeyEdit').onclick = () => { $('cashKeyRow').classList.toggle('hidden'); $('cashKeyInput').focus(); };
   $('cashLoadBtn').onclick = () => load();
 
+  // 11/04 오너: 같은 사람(Josefina, GCash 같은 번호)의 캐시스텝·캐시드릴 대기 건을 따로 보내 수수료를 두 번 냈다 →
+  //   키가 둘 다 저장돼 있으면 처음엔 [🔗 전체 앱]으로 연다(앱을 넘는 같은 수취인 묶음이 여기서만 보인다).
+  if (keyRf() && keyCd() && NAMES.all) appId = 'all';
   setApp(appId);
 })();
 </script>
