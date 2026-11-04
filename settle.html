@@ -145,6 +145,7 @@
   .cp-f { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; background:#20242d; }
   .cp-f .k { flex:0 0 78px; color:var(--muted); font-size:12px; }
   .cp-f .v { flex:1; min-width:0; font-size:15px; font-family:ui-monospace, Menlo, monospace; word-break:break-all; }
+  .cp-f .v .cp-orig { display:block; font-size:11px; color:var(--muted); }
   .cp-f button { flex:0 0 auto; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:#2a2f3a; color:var(--text); font-size:13px; }
   .cp-panel { margin-top:8px; padding:10px; border-radius:10px; background:#20242d; display:flex; flex-direction:column; gap:8px; }
   .cp-panel select, .cp-panel input { width:100%; padding:11px 12px; border-radius:9px; border:1px solid var(--line); background:var(--card); color:var(--text); font-size:15px; }
@@ -1201,7 +1202,7 @@
   const FIELDS = [
     // 11/03: 새 앱은 이름/성을 따로 받는다(firstName·lastName) — 있으면 그대로 복사(추측 없음), 서버가 채운 합친 칸은 숨긴다(skipField).
     ['gcashNumber', 'GCash 번호'], ['firstName', '이름 (First)'], ['lastName', '성 (Last)'], ['fullName', '이름'],
-    ['bankName', '은행'], ['ifsc', 'IFSC'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'], ['phoneNumber', '휴대폰'],
+    ['bankName', '은행'], ['ifsc', 'IFSC'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'], ['phoneNumber', '휴대폰 (국가번호 뺌)'],
     ['routingNumber', '라우팅'], ['swiftCode', 'SWIFT'], ['iban', 'IBAN'], ['branchCode', '지점 코드'],
     ['accountType', '계좌 종류'], ['address', '주소'], ['email', '이메일'],
   ];
@@ -1349,9 +1350,38 @@
     return (k === 'fullName' || k === 'accountHolder') && !!(rc && rc.firstName && rc.lastName);
   }
 
-  function field(k, label, v) {
+  // 11/04 오너: 센트비 입력 칸 형식대로 보여주고 복사한다. 센트비 휴대폰 칸은 국가번호(+27 등)가 이미 고정이라
+  //   "+27764873096" 을 그대로 붙이면 "+27 27764873096" 이 돼 송금이 멈췄다(Miyakazi 건). 원본은 아래 작게 남긴다.
+  const DIAL = { ZA: '27', PH: '63', ID: '62', NG: '234', KE: '254', GH: '233', IN: '91', VN: '84', MY: '60', TH: '66', BR: '55' };
+  function sentbeValue(k, v, country) {
+    const raw = String(v).trim();
+    const digits = raw.replace(/\D/g, '');
+    if (k === 'phoneNumber') {
+      let d = digits; const dial = DIAL[country];
+      if (dial && (raw.startsWith('+') || raw.startsWith('00') || d.length > 10) && d.startsWith(dial)) d = d.slice(dial.length);
+      else if (d.startsWith('00') && dial && d.slice(2).startsWith(dial)) d = d.slice(2 + dial.length);
+      return d.replace(/^0+/, '');
+    }
+    if (k === 'gcashNumber') {
+      if (digits.length === 12 && digits.startsWith('63')) return '0' + digits.slice(2);
+      if (digits.length === 10 && digits.startsWith('9')) return '0' + digits;
+      return digits;
+    }
+    if (k === 'accountNumber' || k === 'branchCode' || k === 'routingNumber') return digits || raw;
+    if (k === 'iban') return raw.replace(/[\s-]/g, '').toUpperCase();
+    return raw;
+  }
+  const SENTBE_HINT = { phoneNumber: '국가번호·맨 앞 0 뺀 번호', gcashNumber: '09로 시작 11자리', accountNumber: '숫자만' };
+
+  function field(k, label, v, country) {
+    const orig = String(v);
+    v = country !== undefined ? sentbeValue(k, orig, country) : orig;
     const r = el('div', 'cp-f');
-    r.append(el('span', 'k', label), el('span', 'v', v));
+    const kEl = el('span', 'k', label);
+    if (country !== undefined && SENTBE_HINT[k]) kEl.title = '센트비 형식: ' + SENTBE_HINT[k];
+    const vEl = el('span', 'v', v);
+    if (v !== orig.trim()) vEl.appendChild(el('small', 'cp-orig', ' (원본 ' + orig + ')'));
+    r.append(kEl, vEl);
     const b = el('button', null, '복사'); b.type = 'button';
     b.onclick = () => copy(v, label);
     r.appendChild(b);
@@ -1412,7 +1442,7 @@
       const v = rc[k];
       if (skipField(rc, k) || v == null || String(v).trim() === '') return;
       any = true;
-      fields.appendChild(field(k, label, String(v)));
+      fields.appendChild(field(k, label, String(v), w.country || ''));
     });
     c.appendChild(fields);
     if (!any) c.appendChild(el('div', 'warn', '수취 정보가 비어 있어요 — 보내지 말고 반려하세요'));
@@ -1697,7 +1727,7 @@
     fields.appendChild(field('amountUsd', '합계 USD', (b.netCents / 100).toFixed(2)));
     Object.keys(b.local).forEach(cur => fields.appendChild(field('amountLocal', '합계 ' + cur, String(b.local[cur]))));
     const rc = first.recipient && typeof first.recipient === 'object' ? first.recipient : {};
-    FIELDS.forEach(([k, label]) => { const v = rc[k]; if (skipField(rc, k) || v == null || String(v).trim() === '') return; fields.appendChild(field(k, label, String(v))); });
+    FIELDS.forEach(([k, label]) => { const v = rc[k]; if (skipField(rc, k) || v == null || String(v).trim() === '') return; fields.appendChild(field(k, label, String(v), first.country || '')); });
     c.appendChild(fields);
     const panel = el('div', 'cp-panel');
     const ref = el('input'); ref.type = 'text'; ref.placeholder = '센트비 송금번호 (필수)'; ref.maxLength = 200;
