@@ -459,6 +459,12 @@
   //   서버 계약: 항목.risk = { level: green|yellow|red|unknown, codes: [], reasons: ['한국어 문장'] } (선택 필드)
   //   risk 가 없거나 모양이 이상하면 null → 배지·요약 없이 예전 화면 그대로.
   const RISK = { green: '🟢 깨끗', yellow: '🟡 확인', red: '🔴 위험', unknown: '⚪ 계산 실패' };
+  // 11/04 오너: 초대 복귀율 5~15% = 보류(15% 이상 되면 송금). 막지는 않고 송금·완료 확인창 맨 위에 경고만 붙인다.
+  window.__holdWarn = function (r) {
+    if (!r || !Array.isArray(r.reasons)) return '';
+    const hit = r.reasons.filter(x => String(x).includes('보류(15% 이상'));
+    return hit.length ? '⚠️ 복귀율 15% 미만 — 보류 대상\n' + hit.join('\n') + '\n\n' : '';
+  };
   function normRisk(r) {
     if (!r || typeof r !== 'object' || !RISK[r.level]) return null;
     return { level: r.level, codes: Array.isArray(r.codes) ? r.codes.map(String) : [],
@@ -629,7 +635,7 @@
     let reason = null;
     if (item.kind === 'paypal' || item.kind === 'paypal-held') {
       if (kind === 'complete') {
-        if (!confirm(usd(item.cents) + ' → ' + item.email + '\n페이팔에서 송금을 마쳤나요?\n(되돌릴 수 없음)')) return;
+        if (!confirm(window.__holdWarn(item.risk) + usd(item.cents) + ' → ' + item.email + '\n페이팔에서 송금을 마쳤나요?\n(되돌릴 수 없음)')) return;
       } else if (kind === 'paypalCheck') {
         if (!confirm(item.email + ' ' + usd(item.cents) + '\n페이팔이 이 주소로 송금을 거부하나요?\n\n거절하고 캐시를 환불한 뒤, 유저에게 "페이팔 주소를 확인하고 다시 신청" 푸시와 안내 메일을 보냅니다.\n(되돌릴 수 없음)')) return;
       } else {
@@ -647,7 +653,7 @@
     } else {
     const send = Math.max(0, item.amount - cfg.fee);
     const q = kind === 'complete'
-      ? won(send) + ' → ' + item.holder + '\n카카오뱅크에서 이체를 마쳤나요?\n(되돌릴 수 없음)'
+      ? window.__holdWarn(item.risk) + won(send) + ' → ' + item.holder + '\n카카오뱅크에서 이체를 마쳤나요?\n(되돌릴 수 없음)'
       : item.holder + ' ' + item.bank + ' ' + item.account + '\n반려할까요? 캐시가 환불되고 "' + (cfg.rejectNote || '계좌 오류') + '" 푸시가 나갑니다.\n(되돌릴 수 없음)';
     if (!confirm(q)) return;
     }
@@ -930,7 +936,7 @@
   async function approve(w, c, btns) {
     if (batching || inflight.has(w.id)) return;
     if (!canSend) { alert('정산 키로는 송금할 수 없어요. 🔑 에 어드민 키를 넣어 주세요.'); return; }
-    if (!confirm('리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.productType === 'data' ? '📶 데이터 ' + (w.planDescription || '') + '\n' : '') + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
+    if (!confirm(window.__holdWarn(normRisk(w.risk)) + '리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.productType === 'data' ? '📶 데이터 ' + (w.planDescription || '') + '\n' : '') + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
     btns.forEach(b => b.disabled = true);
     inflight.add(w.id); renderBatchBtn();
     try {
@@ -1560,7 +1566,7 @@
     const go = el('button', 'ok', '완료 확정'); go.type = 'button';
     cancel.onclick = () => panel.classList.add('hidden');
     go.onclick = async () => {
-      if (!confirm((w.sentAt ? '입금이 확인됐나요?' : '센트비로 송금을 끝냈나요?') + '\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.' + (w.sentAt ? '' : '\n(아직 입금 전이면 [📤 송금 보냄]을 먼저 누르세요)'))) return;
+      if (!confirm(window.__holdWarn(normRisk(w.risk)) + (w.sentAt ? '입금이 확인됐나요?' : '센트비로 송금을 끝냈나요?') + '\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.' + (w.sentAt ? '' : '\n(아직 입금 전이면 [📤 송금 보냄]을 먼저 누르세요)'))) return;
       go.disabled = cancel.disabled = true;
       c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
       try {
