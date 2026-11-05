@@ -1711,10 +1711,13 @@
     return cpWords(rc.fullName || rc.accountHolder || '').sort().join(' ');
   }
   /// 대기 건 중 수취인 키가 같은 2건 이상만 묶음. 순서 = 묶음 안 가장 오래된 신청 순.
+  ///   ⚠️ 송금 보냄(sentAt) 건은 묶지 않는다 — 이미 센트비로 보낸 돈이다. 11/05 돈캐 $5 누락: 보낸 캐시파이 $20 뒤에 들어온
+  ///   새 $5 가 $25 묶음으로 합쳐져, 묶음 완료가 $5 까지 완료로 찍혔다(실송금은 $20 뿐).
   function cpBundles(list) {
     var by = {}, order = [];
     (list || []).forEach(function (w) {
       if (!w || w.status !== 'PENDING') return;
+      if (w.sentAt) return;
       var k = cpRecipientKey(w);
       if (!k) return;
       if (!by[k]) { by[k] = []; order.push(k); }
