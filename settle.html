@@ -44,6 +44,7 @@
     실패 건 표시하고 나머지 계속. 수수료는 건마다 그대로(환불 없음). 앱 하나만 고르면 그 앱 안에서만 묶는다.
   2026-11-03 📤 송금 보냄 — 💵 현금 대기 카드. 센트비로 보낸 직후 [📤 송금 보냄] → POST cash-payout/:id/sent {appId, sent?}(푸시 없음, 상태는 대기 그대로·앱은 '처리 중').
     입금 확인 뒤 [완료](이때만 완료 푸시). 보낸 건은 목록 아래 '송금 보냄' 구역으로, 🚫 차단+반려는 숨긴다(이미 돈이 나갔다).
+  2026-11-08 ⏸ 보류 — 📱 통신비 대기 카드(rf 4앱·캐시드릴). [⏸ 보류] → POST <airtime>/:id/hold {appId, hold, reason?}(알림·환불 없음, 상태 대기 그대로). 보류 건은 맨 아래 '보류 — 보내지 마세요' 구역, [승인] 잠금(서버도 409 on_hold), 🟢 전체 승인·대기 합계에서 제외.
   2026-11-06 ⏸ 보류 — 💵 현금 대기 카드. [⏸ 보류] → POST cash-payout/:id/hold {appId, hold, reason?}(푸시·환불 없음, 상태 대기 그대로). 보류 건은 맨 아래 '보류 — 보내지 마세요' 구역, [완료]·[송금 보냄] 잠금(서버도 409 on_hold), 묶음 제외.
   2026-11-03 🚫 차단+반려 — 📱 통신비·💵 현금 대기 카드(전 건, 🔴 카드는 진한 빨강). 위험 사유를 보여 주는 확인창 → POST <airtime|cash-payout>/:id/block-reject {appId}
     (rf /admin/…, 캐시드릴 /api/v1/settlement/…, 정산 키). 서버가 유저 출금 차단 + 이 건 반려·환불 + 그 유저의 다른 대기 통신비·현금·페이팔 반려·환불(멱등).
@@ -881,10 +882,16 @@
     if (w.status === 'PENDING') riskBadge(normRisk(w.risk), c);
 
     if (w.status === 'PENDING') {
+      // ⏸ 보류(11/08) — 보내지 않고 다음 점검 때 다시 본다. 서버도 승인을 409 on_hold 로 막는다.
+      const held = !!w.heldAt;
+      if (held) {
+        c.classList.add('isheld');
+        c.appendChild(el('div', 'cp-heldbar', '⏸ 보류 · ' + when(w.heldAt) + (w.holdReason ? ' · ' + w.holdReason : '') + ' — 보내지 마세요'));
+      }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '거절');
-      const bo = el('button', 'ok', canSend ? '승인 (송금)' : '승인 🔒');
-      bo.disabled = !canSend;
+      const bo = el('button', 'ok', canSend && !held ? '승인 (송금)' : '승인 🔒');
+      bo.disabled = !canSend || held;
       bf.onclick = () => reject(w, c, [bf, bo]);
       bo.onclick = () => approve(w, c, [bf, bo]);
       acts.append(bf, bo);
@@ -894,7 +901,10 @@
       const bx = el('button', 'blk' + (r0 && r0.level === 'red' ? ' strong' : ''), '🚫 차단+반려');
       bx.type = 'button';
       bx.onclick = () => blockReject(w, c, [bf, bo, bx]);
-      const row2 = el('div', 'acts blk-row'); row2.appendChild(bx);
+      const bh = el('button', null, held ? '▶ 보류 해제' : '⏸ 보류');
+      bh.type = 'button';
+      bh.onclick = () => setAirHold(w, c, !held, [bf, bo, bx, bh]);
+      const row2 = el('div', 'acts blk-row'); row2.append(bh, bx);
       c.appendChild(row2);
     }
     return c;
@@ -941,8 +951,33 @@
     }
   }
 
+  // ── ⏸ 보류(2026-11-08) ── POST .../airtime/:id/hold { appId, hold, reason? } — 알림·환불 없음, 상태는 대기 그대로.
+  async function setAirHold(w, c, hold, btns) {
+    if (batching || inflight.has(w.id)) return;
+    let reason;
+    if (hold) {
+      const r = normRisk(w.risk);
+      const v = prompt('⏸ 보류할까요? (유저 알림·환불 없음, 신청은 대기 그대로)\n\n' + usd(w.amountUsd) + ' · ' + (w.countryCode || '??') + ' · 📞 ' + (w.phone || '')
+        + '\n유저 ' + String(w.userId || '').slice(0, 8) + ' · ' + NAMES[appId] + '\n\n사유(선택):', r && r.reasons.length ? r.reasons[0].slice(0, 120) : '');
+      if (v === null) return;
+      reason = v.trim() || undefined;
+    }
+    btns.forEach(b => b.disabled = true);
+    try {
+      await api(actUrl(w.id, 'hold'), 'POST', { appId: appId, hold: hold, reason: reason });
+      toast(hold ? '⏸ 보류 (유저 알림 없음)' : '▶ 보류 해제');
+      load();   // 보류 구역·대기 합계·🟢 전체 승인이 바뀐다 — 다시 그린다
+    } catch (e) {
+      alert((hold ? '보류' : '보류 해제') + ' 실패: ' + e.message + (e.httpStatus === 404 ? '\n(서버가 아직 이 기능을 모를 수 있어요 — 배포 전)' : ''));
+      btns.forEach(b => b.disabled = false);
+      if (!canSend || w.heldAt) btns[1].disabled = true;
+      if (e.httpStatus === 409) load();
+    }
+  }
+
   async function approve(w, c, btns) {
     if (batching || inflight.has(w.id)) return;
+    if (w.heldAt) { alert('⏸ 보류 중인 건이에요 — [▶ 보류 해제] 뒤에 승인하세요.'); return; }
     if (!canSend) { alert('정산 키로는 송금할 수 없어요. 🔑 에 어드민 키를 넣어 주세요.'); return; }
     if (!confirm(window.__holdWarn(normRisk(w.risk)) + '리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.productType === 'data' ? '📶 데이터 ' + (w.planDescription || '') + '\n' : '') + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
     btns.forEach(b => b.disabled = true);
@@ -1021,7 +1056,8 @@
   //     · 네트워크 오류·401/403/5xx(서버 응답 자체를 못 받음) → 멈춤
   //     · 409(이미 처리됨)·404·리로들리 송금 실패(환불됨) → 그 건만 실패 목록에 넣고 계속
   //   끝나면 목록을 **한 번만** 다시 불러온다(잔액·남은 건 갱신).
-  const isGreen = (w) => { const r = normRisk(w.risk); return !!r && r.level === 'green'; };
+  // ★ 11/08 보류 건은 🟢 여도 일괄 승인에 넣지 않는다(보내지 않기로 한 돈).
+  const isGreen = (w) => { if (w.heldAt) return false; const r = normRisk(w.risk); return !!r && r.level === 'green'; };
   const amtOf = (w) => Number(w.sentUsd ?? w.amountUsd ?? 0);
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   function renderBatchBtn() {
@@ -1132,12 +1168,19 @@
       if (seq !== loadSeq) return;
       canSend = r.canSend === true;
       $('airNoSend').classList.toggle('hidden', canSend);
-      const list = r.withdrawals || [];
+      const list = (r.withdrawals || []).slice();
       balanceUsd = r.balanceUsd;
-      pendingLeft = status === 'PENDING' ? list.slice() : [];
+      // ★ 11/08 보류 건은 맨 아래 '보내지 마세요' 구역 — 대기 합계·🟢 전체 승인(pendingLeft)에서도 뺀다.
+      if (status === 'PENDING') list.sort((a, b) => (!!a.heldAt - !!b.heldAt));
+      pendingLeft = status === 'PENDING' ? list.filter(w => !w.heldAt) : [];
       renderBal();
       const pl = $('airList'); pl.replaceChildren();
-      list.forEach(w => pl.appendChild(airCard(w)));
+      const heldN = status === 'PENDING' ? list.filter(w => !!w.heldAt).length : 0;
+      let heldDivided = false;
+      list.forEach(w => {
+        if (heldN && w.heldAt && !heldDivided) { heldDivided = true; pl.appendChild(el('div', 'cp-divider held', '⏸ 보류 — 보내지 마세요 ' + heldN + '건 (다음 점검 때 다시 판단)')); }
+        pl.appendChild(airCard(w));
+      });
       if (!list.length) pl.appendChild(el('div', 'empty', NAMES[appId] + ' — ' + (status === 'PENDING' ? '대기 건이 없습니다 🎉' : '해당 건이 없습니다')));
     } catch (e) {
       if (seq === loadSeq) alert('불러오기 실패: ' + e.message);
