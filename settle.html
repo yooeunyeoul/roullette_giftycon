@@ -171,6 +171,22 @@
   .cp-items li .res.ok { color:var(--ok); font-weight:700; } .cp-items li .res.bad { color:var(--bad); font-weight:700; }
   .cp-bundle details { margin-top:8px; } .cp-bundle summary { color:var(--muted); font-size:13px; padding:6px 0; }
   .cp-bundle details .card { margin-top:6px; }
+
+  /* ✅ 판정 한 줄(2026-11-10 오너 "보내라는 건지 말라는 건지 헷갈려") — 카드 맨 위 크게. 위험 배지는 아래 '참고 정보'로 접는다. */
+  .verdict { display:block; margin:0 0 8px; padding:10px 12px; border-radius:10px; font-size:18px; font-weight:800; line-height:1.3; }
+  .verdict small { display:block; margin-top:3px; font-size:13px; font-weight:600; opacity:.9; word-break:break-all; }
+  .verdict.send { background:rgba(34,197,94,.18); color:#4ade80; }
+  .verdict.hold { background:rgba(245,158,11,.20); color:#fbbf24; }
+  .verdict.stop { background:rgba(239,68,68,.20); color:#f87171; }
+  .verdict.ask  { background:rgba(239,68,68,.12); color:#fca5a5; border:1px dashed #f87171; }
+  .verdict.sent { background:rgba(79,124,255,.18); color:#9db4ff; }
+  details.refinfo { margin-top:8px; border-radius:8px; background:#1a1e26; }
+  details.refinfo > summary { padding:8px 10px; color:var(--muted); font-size:13px; cursor:pointer; list-style:none; }
+  details.refinfo > summary::-webkit-details-marker { display:none; }
+  details.refinfo[open] > summary { color:var(--text); }
+  details.refinfo .refbody { padding:0 10px 10px; }
+  details.refinfo .risk { margin-top:0; }
+  details.refinfo .explain { margin:2px 0 6px; font-size:12px; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -283,6 +299,64 @@
 
   <div id="toast">복사 완료</div>
 
+<script>
+  // ── ✅ 판정 + 참고 정보(2026-11-10) — 세 스크립트(원화·페이팔 / 통신비 / 현금)가 같이 쓴다. textContent 만.
+  //   판정 규칙(운영 판정과 같다): 차단 계정 → ⛔ 보내지 마세요 · 보류 → ⏸ 보내지 마세요 · 보냄 → 📤 입금 확인 뒤 완료
+  //   · 🔴 위험인데 보류 없음 → ⚠️ 확인 필요(보내기 아님) · 그 외 대기 → ✅ 보내도 됩니다.
+  window.__SV = (function () {
+    function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+    function verdict(c, o) {
+      if (!c || !o || !o.pending) return;
+      var cls, title, sub = '';
+      if (o.blocked) { cls = 'stop'; title = '⛔ 차단 계정 — 보내지 마세요'; sub = '반려하면 캐시가 환불돼요'; }
+      else if (o.held) { cls = 'hold'; title = '⏸ 보류 — 보내지 마세요'; sub = o.holdReason ? '사유: ' + o.holdReason : '다음 점검 때 다시 판단'; }
+      else if (o.sent) { cls = 'sent'; title = '📤 송금 보냄 — 입금 확인되면 [완료]'; }
+      else if (o.riskLevel === 'red') { cls = 'ask'; title = '⚠️ 확인 필요 — 보내기 전에 저에게 물어보세요'; sub = '위험 신호가 있는데 보류가 안 걸려 있어요(참고 정보 확인)'; }
+      else { cls = 'send'; title = o.bundle ? '✅ 보내도 됩니다 — 묶어서 한 번에' : '✅ 보내도 됩니다'; }
+      var v = mk('div', 'verdict ' + cls, title);
+      if (sub) v.appendChild(mk('small', null, sub));
+      c.dataset.verdict = cls;
+      c.prepend(v);
+    }
+    // 참고 정보(기본 접힘) — 카드마다 하나. 처음 부를 때 그 자리에 만든다.
+    function refBox(c) {
+      var d = c.querySelector(':scope > details.refinfo');
+      if (d) return d.querySelector('.refbody');
+      d = mk('details', 'refinfo');
+      d.appendChild(mk('summary', null, '참고 정보 ▾ (판정은 위 한 줄만 보면 돼요)'));
+      var body = mk('div', 'refbody'); d.appendChild(body);
+      c.appendChild(d);
+      return body;
+    }
+    // 위험 사유를 쉬운 말로 한 줄 더.
+    var EXPLAIN = [
+      [/복귀/, '초대한 친구 중 가입 다음 날 이후 다시 들어온 비율이에요. 낮으면 가짜 초대 의심(초대 0명이면 무시해도 돼요).'],
+      [/같은 기기|동일 기기|기기/, '같은 휴대폰에서 만든 다른 계정이 있다는 뜻이에요. 가족이 같이 쓰면 정상일 수 있어요.'],
+      [/탈퇴/, '탈퇴한 계정이 관련돼 있다는 참고예요. 그것만으로 문제는 아니에요.'],
+      [/초대 보상|획득/, '모은 캐시 중 초대 보상 비중이에요. 높아도 초대한 친구들이 진짜면 괜찮아요.'],
+      [/국가|SIM|IP/, '신청 나라와 휴대폰(SIM)·접속(IP) 나라가 달라요. 요율이 더 낮은 나라로 신청했으면 손해 없어요.'],
+      [/같은 번호|같은 수취|같은 계좌|같은 GCash/, '같은 받는 번호·계좌로 다른 계정도 신청했어요.'],
+      [/활동|정제|채굴|미활동/, '최근 본인 활동이 적다는 뜻이에요.'],
+      [/차단/, '관련 계정이 차단된 적이 있어요.']
+    ];
+    function explain(t) { for (var i = 0; i < EXPLAIN.length; i++) if (EXPLAIN[i][0].test(t)) return EXPLAIN[i][1]; return ''; }
+    var LBL = { green: '🟢 깨끗', yellow: '🟡 확인', red: '🔴 위험', unknown: '⚪ 계산 실패' };
+    function risk(r, c) {
+      if (!r) return;
+      c.dataset.risk = r.level;
+      if (r.level === 'red') c.classList.add('risk-red');
+      var body = refBox(c);
+      body.appendChild(mk('div', 'risk ' + r.level, LBL[r.level] || r.level));
+      if (r.reasons && r.reasons.length) {
+        var ul = mk('ul', 'risk-reasons');
+        r.reasons.forEach(function (t) { var li = mk('li', null, t); var ex = explain(String(t)); if (ex) li.appendChild(mk('div', 'explain', '→ ' + ex)); ul.appendChild(li); });
+        body.appendChild(ul);
+      }
+      var d = body.parentNode; if (d && d.querySelector) d.querySelector('summary').textContent = '참고 정보 ▾ ' + (LBL[r.level] || '') + (r.reasons && r.reasons.length && r.level !== 'green' ? ' · ' + r.reasons.length + '개' : '');
+    }
+    return { verdict: verdict, refBox: refBox, risk: risk };
+  })();
+</script>
 <script>
 (function () {
   'use strict';
@@ -479,24 +553,7 @@
     return { level: r.level, codes: Array.isArray(r.codes) ? r.codes.map(String) : [],
       reasons: Array.isArray(r.reasons) ? r.reasons.filter(x => x != null && x !== '').map(String) : [] };
   }
-  function riskBadge(item, c) {
-    const r = item.risk;
-    if (!r) return;
-    c.dataset.risk = r.level;
-    if (r.level === 'red') c.classList.add('risk-red');   // 테두리만 붉게
-    const canOpen = r.level !== 'green' && r.reasons.length > 0;
-    const b = el(canOpen ? 'button' : 'div', 'risk ' + r.level, RISK[r.level] + (canOpen ? ' · ' + r.reasons.length : ''));
-    const wrap = el('div'); wrap.appendChild(b); c.appendChild(wrap);
-    // 🟢 에도 참고 사유(예: "초대 품질 정상: 복귀 42%")가 오면 한 줄로만 보여 준다(10/30).
-    if (r.level === 'green' && r.reasons.length) wrap.appendChild(el('div', 'risk-note', r.reasons[0]));
-    if (!canOpen) return;
-    b.type = 'button';
-    const chev = el('span', 'chev', '▼'); b.appendChild(chev);
-    const ul = el('ul', 'risk-reasons hidden');
-    r.reasons.forEach(t => ul.appendChild(el('li', null, t)));   // textContent 만
-    c.appendChild(ul);
-    b.onclick = () => { const open = ul.classList.toggle('hidden') === false; chev.textContent = open ? '▲' : '▼'; };
-  }
+  function riskBadge(item, c) { window.__SV.risk(item.risk, c); }   // 11/10 참고 정보(접힘)로 이동
   let riskFilter = 'all';
   function setRiskFilter(f) {
     riskFilter = f;
@@ -545,8 +602,8 @@
     c.dataset.id = item.id;
     c.appendChild(el('div', 'amt', usd(item.cents)));
     c.appendChild(el('div', 'acct', item.email));
-    if (item.blocked) c.appendChild(el('div', 'blocked', '⛔ 차단 계정 — 보내지 마세요 (거절하면 캐시 환불)'));
-    if (item.kind === 'paypal-held') { c.classList.add('held'); c.appendChild(el('div', 'heldnote', '⏸ 보류: ' + item.holdReason)); }
+    if (item.kind === 'paypal-held') c.classList.add('held');
+    window.__SV.verdict(c, { pending: item.ui === 'pending', blocked: item.blocked, held: item.kind === 'paypal-held', holdReason: item.holdReason, riskLevel: item.risk && item.risk.level });
     riskBadge(item, c);
     c.appendChild(el('div', 'meta', new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
@@ -616,6 +673,7 @@
     c.appendChild(el('div', 'acct', item.bank + ' ' + item.account));
     const h = el('div', 'holder', '예금주 '); h.appendChild(el('b', null, item.holder)); c.appendChild(h);
     riskBadge(item, c);
+    window.__SV.verdict(c, { pending: item.ui === 'pending', riskLevel: item.risk && item.risk.level });
     if (item.facts) factsLines(item.facts).forEach(([t, warn]) => c.appendChild(el('div', warn ? 'meta warn' : 'meta', t)));
     c.appendChild(el('div', 'meta', (item.status === 'approved' ? '승인됨 · ' : '') + new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
@@ -847,24 +905,7 @@
     return { level: r.level, codes: Array.isArray(r.codes) ? r.codes.map(String) : [],
       reasons: Array.isArray(r.reasons) ? r.reasons.filter(x => x != null && x !== '').map(String) : [] };
   }
-  function riskBadge(r, c) {
-    if (!r) return;
-    c.dataset.risk = r.level;
-    if (r.level === 'red') c.classList.add('risk-red');
-    const canOpen = r.level !== 'green' && r.reasons.length > 0;
-    const b = el(canOpen ? 'button' : 'div', 'risk ' + r.level, RISK[r.level] + (canOpen ? ' · ' + r.reasons.length : ''));
-    const wrap = el('div'); wrap.appendChild(b); c.appendChild(wrap);
-    // 🟢 에도 참고 사유(예: "초대 품질 정상: 복귀 42%")가 오면 한 줄로만 보여 준다(10/30).
-    if (r.level === 'green' && r.reasons.length) wrap.appendChild(el('div', 'risk-note', r.reasons[0]));
-    if (!canOpen) return;
-    b.type = 'button';
-    const chev = el('span', 'chev', '▼'); b.appendChild(chev);
-    const ul = el('ul', 'risk-reasons');   // 통신비는 건수가 적어 사유를 처음부터 펼친다
-    chev.textContent = '▲';
-    r.reasons.forEach(t => ul.appendChild(el('li', null, t)));   // textContent 만
-    c.appendChild(ul);
-    b.onclick = () => { const open = ul.classList.toggle('hidden') === false; chev.textContent = open ? '▲' : '▼'; };
-  }
+  function riskBadge(r, c) { window.__SV.risk(r, c); }   // 11/10 참고 정보(접힘)로 이동
 
   function airCard(w) {
     const c = el('div', 'card');
@@ -884,10 +925,8 @@
     if (w.status === 'PENDING') {
       // ⏸ 보류(11/08) — 보내지 않고 다음 점검 때 다시 본다. 서버도 승인을 409 on_hold 로 막는다.
       const held = !!w.heldAt;
-      if (held) {
-        c.classList.add('isheld');
-        c.appendChild(el('div', 'cp-heldbar', '⏸ 보류 · ' + when(w.heldAt) + (w.holdReason ? ' · ' + w.holdReason : '') + ' — 보내지 마세요'));
-      }
+      if (held) c.classList.add('isheld');
+      { const r0v = normRisk(w.risk); window.__SV.verdict(c, { pending: true, blocked: w.payoutBlocked === true, held: held, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '거절');
       const bo = el('button', 'ok', canSend && !held ? '승인 (송금)' : '승인 🔒');
@@ -1333,22 +1372,7 @@
     if (!r || typeof r !== 'object' || !RISK[r.level]) return null;
     return { level: r.level, reasons: Array.isArray(r.reasons) ? r.reasons.filter(x => x != null && x !== '').map(String) : [] };
   }
-  function riskBadge(r, c) {
-    if (!r) return;
-    c.dataset.risk = r.level;
-    if (r.level === 'red') c.classList.add('risk-red');
-    const canOpen = r.level !== 'green' && r.reasons.length > 0;
-    const b = el(canOpen ? 'button' : 'div', 'risk ' + r.level, RISK[r.level] + (canOpen ? ' · ' + r.reasons.length : ''));
-    const wrap = el('div'); wrap.appendChild(b); c.appendChild(wrap);
-    if (r.level === 'green' && r.reasons.length) wrap.appendChild(el('div', 'risk-note', r.reasons[0]));
-    if (!canOpen) return;
-    b.type = 'button';
-    const chev = el('span', 'chev', '▲'); b.appendChild(chev);
-    const ul = el('ul', 'risk-reasons');   // 건수가 적어 처음부터 펼친다(통신비와 같음)
-    r.reasons.forEach(t => ul.appendChild(el('li', null, t)));
-    c.appendChild(ul);
-    b.onclick = () => { const open = ul.classList.toggle('hidden') === false; chev.textContent = open ? '▲' : '▼'; };
-  }
+  function riskBadge(r, c) { window.__SV.risk(r, c); }   // 11/10 참고 정보(접힘)로 이동
 
   function renderSum(serverSum) {
     const box = $('cashSum'); box.replaceChildren(); box.classList.remove('hidden');
@@ -1512,12 +1536,11 @@
     if (w.status === 'PENDING') {
       const k = cpRecipientKey(w);
       const others = k ? rows.filter(o => o !== w && o.status === 'PENDING' && cpRecipientKey(o) === k) : [];
-      if (others.length) c.appendChild(el('div', 'cp-hist-warn', '🔗 같은 번호 대기 ' + others.length + '건 더 (' + [...new Set(others.map(o => NAMES[rowApp(o)] || rowApp(o)))].join(', ') + ') — 묶어서 한 번에 보내면 수수료 한 번'));
+      if (others.length) window.__SV.refBox(c).appendChild(el('div', 'cp-hist-warn', '🔗 같은 번호 대기 ' + others.length + '건 더 (' + [...new Set(others.map(o => NAMES[rowApp(o)] || rowApp(o)))].join(', ') + ') — 묶어서 한 번에 보내면 수수료 한 번'));
     }
     const hist = cpHistoryBox(w);
-    if (hist) c.appendChild(hist);
+    if (hist) window.__SV.refBox(c).appendChild(hist);
 
-    if (blocked) c.appendChild(el('div', 'blocked', '⛔ 차단 계정 — 보내지 마세요 (완료 불가)'));
     if (w.status === 'PENDING') riskBadge(normRisk(w.risk), c);
     c.appendChild(el('div', 'meta', '신청 ' + when(w.createdAt) + ' · 유저 ' + String(w.userId || '').slice(0, 8)
       + (w.processedAt ? ' · 처리 ' + when(w.processedAt) : '')));
@@ -1528,14 +1551,9 @@
       const sent = !!w.sentAt;
       // ⏸ 보류(11/06) — 보내지 않고 며칠 뒤 다시 본다. 이미 보낸(sent) 건엔 걸지 않는다.
       const held = !!w.heldAt && !sent;
-      if (held) {
-        c.classList.add('isheld');
-        c.appendChild(el('div', 'cp-heldbar', '⏸ 보류 · ' + when(w.heldAt) + (w.holdReason ? ' · ' + w.holdReason : '') + ' — 보내지 마세요'));
-      }
-      if (sent) {
-        c.classList.add('issent');
-        c.appendChild(el('div', 'cp-sentbar', '📤 송금 보냄 · ' + when(w.sentAt) + ' — 입금이 확인되면 [완료] (그때 유저에게 완료 푸시)'));
-      }
+      if (held) c.classList.add('isheld');
+      if (sent) c.classList.add('issent');
+      { const r0v = normRisk(w.risk); window.__SV.verdict(c, { pending: true, blocked: blocked, held: held, sent: sent, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '반려');
       const bo = el('button', 'ok', blocked || held ? '완료 🔒' : sent ? '완료 (입금 확인)' : '완료');
@@ -1843,8 +1861,10 @@
     badges.appendChild(el('span', 'cp-badge ' + (first.method === 'gcash' ? 'gcash' : 'bank'), first.method === 'gcash' ? 'GCash' : '🏦 은행'));
     if (b.crossApp) badges.appendChild(el('span', 'cp-badge cp-app', '앱 교차'));
     if (b.nameMismatch) badges.appendChild(el('span', 'cp-badge cp-warn', '⚠️ 이름 다름 — 확인 후 송금'));
-    if (b.blocked) badges.appendChild(el('span', 'cp-badge cp-bad', '⛔ 차단 계정 포함 — 그 건 반려 후 다시 불러오기'));
     c.appendChild(badges);
+    { const reds = b.items.filter(function (w) { return w.risk && w.risk.level === 'red'; }).length;
+      window.__SV.verdict(c, { pending: true, bundle: true, blocked: b.blocked, holdReason: '', riskLevel: reds ? 'red' : null });
+      if (b.blocked) c.querySelector('.verdict small').textContent = '차단 계정이 들어 있어요 — 그 건을 반려한 뒤 다시 불러오세요'; }
     const amt = el('div', 'amt', usd(b.netCents)); amt.appendChild(el('small', null, '실지급 합계'));
     c.appendChild(amt);
     const locs = Object.keys(b.local).map(cur => local(b.local[cur], cur)).filter(Boolean);
