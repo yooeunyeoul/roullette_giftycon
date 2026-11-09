@@ -311,13 +311,43 @@
       if (o.blocked) { cls = 'stop'; title = '⛔ 차단 계정 — 보내지 마세요'; sub = '반려하면 캐시가 환불돼요'; }
       else if (o.held) { cls = 'hold'; title = '⏸ 보류 — 보내지 마세요'; sub = o.holdReason ? '사유: ' + o.holdReason : '다음 점검 때 다시 판단'; }
       else if (o.sent) { cls = 'sent'; title = '📤 송금 보냄 — 입금 확인되면 [완료]'; }
+      else if (o.id && REV[String(o.id)]) { cls = 'send'; title = '✅ 보내도 됩니다 — 점검 완료'; sub = REV[String(o.id)] || '출금 전 점검에서 지급 판정'; }
       else if (o.riskLevel === 'red') { cls = 'ask'; title = '⚠️ 확인 필요 — 보내기 전에 저에게 물어보세요'; sub = '위험 신호가 있는데 보류가 안 걸려 있어요(참고 정보 확인)'; }
       else { cls = 'send'; title = o.bundle ? '✅ 보내도 됩니다 — 묶어서 한 번에' : '✅ 보내도 됩니다'; }
       var v = mk('div', 'verdict ' + cls, title);
       if (sub) v.appendChild(mk('small', null, sub));
       c.dataset.verdict = cls;
+      if (o.id != null) { c.dataset.wid = String(o.id); c.__svo = o; }
       c.prepend(v);
     }
+    // ── 점검 완료 표시(2026-11-10) — 서버 payout_reviews(rf /admin/payout-reviews · 캐시드릴 /api/v1/settlement/payout-reviews).
+    //   출금 전 점검이 "지급"으로 판정한 출금 id → 메모. 표시가 있으면 🔴 배지가 있어도 ⚠️ 대신 ✅. 보류·차단·보냄이 언제나 이긴다.
+    var REV = {};
+    function lsg(k) { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }
+    function reapply() {
+      document.querySelectorAll('[data-wid]').forEach(function (c) {
+        var o = c.__svo; if (!o || !REV[c.dataset.wid]) return;
+        if (c.dataset.verdict !== 'ask' && c.dataset.verdict !== 'send') return;
+        var old = c.querySelector(':scope > .verdict'); if (old) old.remove();
+        verdict(c, o);
+      });
+    }
+    function loadReviews() {
+      var rf = lsg('settle.key.cash') || lsg('settle.key.air') || lsg('settle.key.cashfi') || lsg('settle.key.cashstep') || lsg('settle.key.gold');
+      var cd = lsg('settle.key.cash.cashdrill') || lsg('settle.key.air.cashdrill') || lsg('settle.key.cashdrill');
+      var jobs = [];
+      if (rf) jobs.push(['https://reward-factory-backend.fly.dev/admin/payout-reviews?days=14', rf]);
+      if (cd) jobs.push(['https://cashdrill-backend.fly.dev/api/v1/settlement/payout-reviews?days=14', cd]);
+      jobs.forEach(function (j) {
+        fetch(j[0], { headers: { Authorization: 'Bearer ' + j[1] } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (b) {
+          if (!b || !b.reviews) return;
+          b.reviews.forEach(function (x) { REV[String(x.id)] = x.note || '출금 전 점검에서 지급 판정'; });
+          reapply();
+        }).catch(function () {});
+      });
+    }
+    loadReviews();
+    setInterval(loadReviews, 60000);
     // 참고 정보(기본 접힘) — 카드마다 하나. 처음 부를 때 그 자리에 만든다.
     function refBox(c) {
       var d = c.querySelector(':scope > details.refinfo');
@@ -603,7 +633,7 @@
     c.appendChild(el('div', 'amt', usd(item.cents)));
     c.appendChild(el('div', 'acct', item.email));
     if (item.kind === 'paypal-held') c.classList.add('held');
-    window.__SV.verdict(c, { pending: item.ui === 'pending', blocked: item.blocked, held: item.kind === 'paypal-held', holdReason: item.holdReason, riskLevel: item.risk && item.risk.level });
+    window.__SV.verdict(c, { id: item.id, pending: item.ui === 'pending', blocked: item.blocked, held: item.kind === 'paypal-held', holdReason: item.holdReason, riskLevel: item.risk && item.risk.level });
     riskBadge(item, c);
     c.appendChild(el('div', 'meta', new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
@@ -673,7 +703,7 @@
     c.appendChild(el('div', 'acct', item.bank + ' ' + item.account));
     const h = el('div', 'holder', '예금주 '); h.appendChild(el('b', null, item.holder)); c.appendChild(h);
     riskBadge(item, c);
-    window.__SV.verdict(c, { pending: item.ui === 'pending', riskLevel: item.risk && item.risk.level });
+    window.__SV.verdict(c, { id: item.id, pending: item.ui === 'pending', riskLevel: item.risk && item.risk.level });
     if (item.facts) factsLines(item.facts).forEach(([t, warn]) => c.appendChild(el('div', warn ? 'meta warn' : 'meta', t)));
     c.appendChild(el('div', 'meta', (item.status === 'approved' ? '승인됨 · ' : '') + new Date(item.createdAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })));
 
@@ -926,7 +956,7 @@
       // ⏸ 보류(11/08) — 보내지 않고 다음 점검 때 다시 본다. 서버도 승인을 409 on_hold 로 막는다.
       const held = !!w.heldAt;
       if (held) c.classList.add('isheld');
-      { const r0v = normRisk(w.risk); window.__SV.verdict(c, { pending: true, blocked: w.payoutBlocked === true, held: held, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
+      { const r0v = normRisk(w.risk); window.__SV.verdict(c, { id: w.id, pending: true, blocked: w.payoutBlocked === true, held: held, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '거절');
       const bo = el('button', 'ok', canSend && !held ? '승인 (송금)' : '승인 🔒');
@@ -1553,7 +1583,7 @@
       const held = !!w.heldAt && !sent;
       if (held) c.classList.add('isheld');
       if (sent) c.classList.add('issent');
-      { const r0v = normRisk(w.risk); window.__SV.verdict(c, { pending: true, blocked: blocked, held: held, sent: sent, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
+      { const r0v = normRisk(w.risk); window.__SV.verdict(c, { id: w.id, pending: true, blocked: blocked, held: held, sent: sent, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '반려');
       const bo = el('button', 'ok', blocked || held ? '완료 🔒' : sent ? '완료 (입금 확인)' : '완료');
