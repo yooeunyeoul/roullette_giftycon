@@ -1261,7 +1261,8 @@
     ['gcashNumber', 'GCash 번호'], ['firstName', '이름 (First)'], ['lastName', '성 (Last)'], ['fullName', '이름'],
     ['bankName', '은행'], ['ifsc', 'IFSC'], ['accountNumber', '계좌번호'], ['accountHolder', '예금주'], ['phoneNumber', '휴대폰 (국가번호 뺌)'],
     ['routingNumber', '라우팅'], ['swiftCode', 'SWIFT'], ['iban', 'IBAN'], ['branchCode', '지점 코드'],
-    ['accountType', '계좌 종류'], ['address', '주소'], ['email', '이메일'],
+    // 11/10: 미국은 주소를 센트비 미국 폼 순서(우편번호·주·도시·영문 주소)로 나눠 받는다 — 새 앱만 칸이 있고, 구버전은 주소 한 칸(ZIP 포함).
+    ['accountType', '계좌 종류'], ['postalCode', '우편번호 (ZIP)'], ['state', '주 (State)'], ['city', '도시'], ['address', '영문 주소'], ['email', '이메일'],
   ];
   const $ = (id) => document.getElementById(id);
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
