@@ -2081,5 +2081,53 @@
   setApp(appId);
 })();
 </script>
+<details class="refinfo" id="payxBox" style="margin:24px 0 32px">
+  <summary>🧾 월별 지급내역 다운로드 (세무 소명용 엑셀)</summary>
+  <div class="refbody">
+    <p class="explain">세무서가 "보상 비용 증빙"을 요청할 때 내는 파일입니다. 실제로 지급 완료된 건만, 한 줄에 한 사람씩(수령인·금액·일시·사유·거래ID) 들어갑니다. 엑셀에서 바로 열립니다.</p>
+    <div class="row">
+      <input type="month" id="payxMonth" style="flex:1">
+    </div>
+    <div class="row">
+      <button class="btn" id="payxRf" style="flex:1">리워드팩토리 4앱</button>
+      <button class="btn" id="payxCd" style="flex:1">캐시드릴</button>
+    </div>
+    <p class="explain" id="payxMsg"></p>
+  </div>
+</details>
+<script>
+// 월별 유저 보상 지급 내역 CSV(2026-11-10) — rf /admin/payout-export · 캐시드릴 /api/v1/settlement/payout-export (정산 키).
+(function () {
+  function lsg(k) { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } }
+  var m = document.getElementById('payxMonth');
+  var d = new Date(Date.now() + 9 * 3600e3); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+  m.value = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
+  var msg = document.getElementById('payxMsg');
+  function dl(url, key, name, btn) {
+    if (!key) { msg.textContent = '정산 키가 없습니다 — 위에서 해당 앱 키를 먼저 저장하세요.'; return; }
+    if (!/^\d{4}-\d{2}$/.test(m.value)) { msg.textContent = '월을 고르세요.'; return; }
+    btn.disabled = true; msg.textContent = '만드는 중…';
+    fetch(url + '?month=' + m.value, { headers: { Authorization: 'Bearer ' + key } })
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + t.slice(0, 120)); }); return r.blob(); })
+      .then(function (b) {
+        var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name + '-' + m.value + '.csv';
+        document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        msg.textContent = '받았습니다: ' + a.download;
+      })
+      .catch(function (e) { msg.textContent = '실패: ' + e.message; })
+      .finally(function () { btn.disabled = false; });
+  }
+  document.getElementById('payxRf').onclick = function () {
+    dl('https://reward-factory-backend.fly.dev/admin/payout-export',
+      lsg('settle.key.cash') || lsg('settle.key.air') || lsg('settle.key.cashfi') || lsg('settle.key.cashstep') || lsg('settle.key.gold'),
+      '지급내역-리워드팩토리', this);
+  };
+  document.getElementById('payxCd').onclick = function () {
+    dl('https://cashdrill-backend.fly.dev/api/v1/settlement/payout-export',
+      lsg('settle.key.cash.cashdrill') || lsg('settle.key.air.cashdrill') || lsg('settle.key.cashdrill'),
+      '지급내역-캐시드릴', this);
+  };
+})();
+</script>
 </body>
 </html>
