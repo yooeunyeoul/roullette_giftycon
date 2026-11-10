@@ -24,6 +24,8 @@
   2026-10-29 📱 에어타임 모드에 캐시드릴 추가 — 캐시드릴 백엔드 GET /api/v1/settlement/airtime?status= · POST /:id/approve · POST /:id/reject(사유 필수).
   · rf 와 같은 응답 모양·같은 카드 코드. 다른 건 서버 주소와 키뿐 — 캐시드릴 키는 캐시드릴 백엔드 키다(rf 키로는 401).
   · 키: 에어타임 캐시드릴 전용(settle.key.air.cashdrill, 송금하려면 캐시드릴 ADMIN_API_KEY) → 없으면 출금 정산 캐시드릴 키(정산 키, 목록·거절만).
+  2026-11-11 🤝 파트너 수수료 — 카드 = 받을 금액 / 수수료(서버 feeUsd = 유저 현금 출금 나라별 feeCents) / 보낼 금액(크게·[복사]).
+    [보냄]은 정산 금액(받을 금액)을 기록하고 메모에 '수수료 $4 차감·수취 $X' 자동. 받을 ≤ 수수료면 회색 '이월'(보냄 잠금).
   2026-11-11 🤝 파트너 정산 모드 — 창작자 파트너 받을 금액·센트비 은행 정보 [복사]·[보냄](기록만, method=sentbe, idemKey 중복 방지)·[지급 정보 수정].
     rf /admin/partners/payout-sheet · 캐시드릴 /api/v1/settlement/partners/payout-sheet (정산 키). 페이팔 종료 — 메일 연락처는 경고로만.
   2026-10-29 골드스텝(GoldManbo) 탭 — 원화 계좌이체만(한국 전용). 골드스텝 백엔드 goldmanbo-backend GET /api/v1/admin/withdraw?status=PENDING ·
@@ -198,6 +200,16 @@
   .pt-owed { margin-top:6px; font-size:30px; font-weight:900; color:#ffd479; letter-spacing:-.5px; }
   .pt-card.pt-zero .pt-owed { color:var(--muted); }
   .pt-calc { color:var(--muted); font-size:12px; }
+  .pt-lines { margin-top:6px; display:grid; grid-template-columns:auto 1fr auto; gap:2px 10px; align-items:baseline; }
+  .pt-lines .k { color:var(--muted); font-size:13px; }
+  .pt-lines .v { font-size:15px; font-weight:700; text-align:right; }
+  .pt-lines .fee { color:#fca5a5; }
+  .pt-lines .send { font-size:30px; font-weight:900; color:#ffd479; letter-spacing:-.5px; }
+  .pt-lines button { padding:4px 10px; font-size:12px; }
+  .pt-carry { margin-top:6px; padding:8px 10px; border-radius:8px; background:#1a1e26; color:var(--muted); font-size:13px; font-weight:700; }
+  .pt-card.pt-carried { opacity:.6; }
+  .pt-quote { font-size:13px; color:#cfd5e2; }
+  .pt-quote b { color:#ffd479; font-size:16px; }
   .pt-warn { margin-top:8px; padding:8px 10px; border-radius:8px; background:rgba(245,158,11,.18); color:#fcd34d; font-size:13px; font-weight:700; }
   .pt-hist { margin-top:8px; padding:8px 10px; border-radius:8px; background:#1a1e26; font-size:12px; line-height:1.6; color:var(--muted); }
   .pt-hist b { color:#cfd5e2; }
@@ -341,7 +353,7 @@
       <button class="btn" id="ptLoadBtn" style="flex:1">파트너 정산 불러오기</button>
       <button class="btn ghost" id="ptKeyEdit" title="키 변경">🔑</button>
     </div>
-    <p class="note">받을 금액 확인 → 지급 정보 [복사] → <b>센트비</b> 은행 송금 → <b>[보냄]</b>. 누르면 지급 기록이 남고 월별 지급내역(CSV)에 자동으로 들어가요. 페이팔은 종료 — 지급 정보가 없으면 [지급 정보 수정]에서 은행 정보를 넣어 주세요.</p>
+    <p class="note">카드의 <b>보낼 금액</b>(받을 금액 − 수수료, 유저 현금 출금과 같은 나라별 수수료) [복사] → 지급 정보 [복사] → <b>센트비</b>로 보낼 금액 송금 → <b>[보냄]</b>(받을 금액이 정산돼요). 수수료보다 적으면 이월. 누르면 지급 기록이 남고 월별 지급내역(CSV)에 자동으로 들어가요. 페이팔은 종료 — 지급 정보가 없으면 [지급 정보 수정]에서 은행 정보를 넣어 주세요.</p>
     <div class="air-bal hidden" id="ptSum"></div>
     <div id="ptList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
   </div>
@@ -2186,6 +2198,11 @@
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k) || ''; localStorage.setItem(k, v); } catch (_) { return ''; } return ''; }
   const num = (x) => { const n = Number(x); return Number.isFinite(n) ? n : 0; };
   const usd = (n) => '$' + num(n).toFixed(2);
+  const usdS = (n) => usd(n).replace(/\.00$/, '');   // 수수료 $4 처럼 짧게
+  // 수수료는 서버(feeUsd = 유저 현금 출금 나라별 feeCents)가 준다. 배포 전 서버면 같은 표로 대신(PH $2, 그 외 $4).
+  const feeOf = (p) => (p.feeUsd != null && Number.isFinite(Number(p.feeUsd))) ? num(p.feeUsd) : (String(p.country || '').toUpperCase() === 'PH' ? 2 : 4);
+  const sendOf = (p, amount) => Math.round((num(amount) - feeOf(p)) * 100) / 100;   // ≤0 = 이월
+  const sendNow = (p) => (p.sendUsd != null && p.feeUsd != null) ? num(p.sendUsd) : Math.max(0, sendOf(p, p.owedUsd));
   const day = (t) => { if (!t) return ''; const d = new Date(new Date(t).getTime() + 9 * 3600e3); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate(); };   // KST
   let tt;
   function toast(msg) { const e = $('toast'); e.textContent = msg; e.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => e.classList.remove('show'), 1300); }
@@ -2243,11 +2260,14 @@
 
   function renderSum(cards, notes) {
     const box = $('ptSum'); box.replaceChildren(); box.classList.remove('hidden');
-    const due = cards.filter(p => num(p.owedUsd) > 0);
+    const due = cards.filter(p => num(p.owedUsd) > 0 && sendNow(p) > 0);
+    const carried = cards.filter(p => num(p.owedUsd) > 0 && !(sendNow(p) > 0));
     box.appendChild(document.createTextNode('보낼 파트너 '));
     box.appendChild(el('b', null, due.length + '명'));
-    box.appendChild(document.createTextNode(' · 합계 '));
-    box.appendChild(el('b', null, usd(due.reduce((a, p) => a + num(p.owedUsd), 0))));
+    box.appendChild(document.createTextNode(' · 송금 합계 '));
+    box.appendChild(el('b', null, usd(due.reduce((a, p) => a + sendNow(p), 0))));
+    box.appendChild(document.createTextNode(' (받을 ' + usd(due.reduce((a, p) => a + num(p.owedUsd), 0)) + ' − 수수료 ' + usd(due.reduce((a, p) => a + feeOf(p), 0)) + ')'
+      + (carried.length ? ' · 이월 ' + carried.length + '명' : '')));
     for (const t of notes) box.appendChild(el('div', 'warn', t));
   }
 
@@ -2266,14 +2286,30 @@
 
   function card(p) {
     const owed = num(p.owedUsd);
-    const c = el('div', 'card pt-card' + (owed > 0 ? '' : ' pt-zero'));
+    const fee = feeOf(p), sendAmt = sendNow(p);
+    const carry = owed > 0 && !(sendAmt > 0);   // 수수료보다 적어서 이월
+    const c = el('div', 'card pt-card' + (owed > 0 ? (carry ? ' pt-carried' : '') : ' pt-zero'));
     const head = el('div', 'pt-head');
     head.appendChild(el('span', 'pt-name', p.name || '(이름 없음)'));
     head.appendChild(el('span', 'cp-badge cp-app', NAMES[p._app] || p._app));
     if (p.country) head.appendChild(el('span', 'cp-badge', p.country));
     c.appendChild(head);
     if (p.channel) c.appendChild(el('div', 'cp-sub', p.channel));
-    c.appendChild(el('div', 'pt-owed', owed > 0 ? usd(owed) : (owed < 0 ? '과지급 ' + usd(-owed) : '보낼 돈 없음')));
+    if (owed > 0) {
+      // 유저 현금 출금과 같다: 받을 금액 − 나라별 수수료 = 보낼 금액(센트비에 넣는 돈).
+      const lines = el('div', 'pt-lines');
+      lines.append(el('span', 'k', '받을 금액'), el('span', 'v', usd(owed)), el('span'));
+      lines.append(el('span', 'k', '수수료'), el('span', 'v fee', '−' + usd(fee)), el('span'));
+      if (!carry) {
+        const cb = el('button', null, '복사'); cb.type = 'button';
+        cb.onclick = () => copy(sendAmt.toFixed(2), '보낼 금액');
+        lines.append(el('span', 'k', '보낼 금액'), el('span', 'v send', usd(sendAmt)), cb);
+      }
+      c.appendChild(lines);
+      if (carry) c.appendChild(el('div', 'pt-carry', '수수료보다 적어서 이월 — 다음 정산 때 합쳐서 보내요'));
+    } else {
+      c.appendChild(el('div', 'pt-owed', owed < 0 ? '과지급 ' + usd(-owed) : '보낼 돈 없음'));
+    }
     const calc = '검증 ' + num(p.verifiedTotal) + '명 × ' + usd(p.ratePerVerified).replace(/0+$/, '').replace(/\.$/, '')
       + (num(p.bonusUsd) ? ' + 보너스 ' + usd(p.bonusUsd) : '') + ' = ' + usd(p.earnedUsd) + ' − 보낸 돈 ' + usd(p.paidUsd);
     c.appendChild(el('div', 'pt-calc', calc));
@@ -2308,8 +2344,9 @@
 
     const acts = el('div', 'acts');
     const send = el('button', 'pt-send', '보냄'); send.type = 'button';
-    send.disabled = owed <= 0 || !info;
+    send.disabled = owed <= 0 || !info || carry;
     if (!info && owed > 0) send.title = '지급 정보를 먼저 넣어 주세요';
+    if (carry) send.title = '수수료보다 적어서 이월';
     const edit = el('button', 'pt-edit', '지급 정보 수정'); edit.type = 'button';
     acts.append(send, edit);
     c.appendChild(acts);
@@ -2323,22 +2360,42 @@
     panel.replaceChildren();
     const box = el('div', 'cp-panel');
     const key = idem();   // 이 창에서 몇 번을 눌러도 한 번만 기록된다
-    box.appendChild(el('div', null, '센트비로 보낸 금액(달러)'));
+    const fee = feeOf(p);
+    box.appendChild(el('div', null, '정산할 금액 = 받을 금액(달러) — 일부만 정산하면 고치세요'));
     const amt = el('input'); amt.type = 'number'; amt.step = '0.01'; amt.min = '0.01'; amt.inputMode = 'decimal';
     amt.value = num(p.owedUsd).toFixed(2);
+    const quote = el('div', 'pt-quote');
     const memo = el('input'); memo.type = 'text'; memo.maxLength = 500; memo.placeholder = '메모 (선택 · 예: 센트비 거래번호, 10월분)';
     const err = el('div', 'pt-err');
+    const autoNote = (v) => '수수료 ' + usdS(fee) + ' 차감·수취 ' + usd(sendOf(p, v));
+    let lastAuto = autoNote(amt.value);
+    memo.value = lastAuto;
+    const refresh = () => {
+      const v = Math.round(num(amt.value) * 100) / 100;
+      const sv = sendOf(p, v);
+      quote.replaceChildren();
+      if (sv > 0) {
+        quote.appendChild(document.createTextNode('실제 송금 '));
+        quote.appendChild(el('b', null, usd(sv)));
+        quote.appendChild(document.createTextNode(' (' + usd(v) + ' − 수수료 ' + usd(fee) + ')'));
+      } else quote.textContent = '수수료(' + usd(fee) + ')보다 적어서 보낼 수 없어요 — 이월';
+      if (memo.value === lastAuto) { lastAuto = autoNote(v); memo.value = lastAuto; }
+    };
+    amt.oninput = refresh;
+    refresh();
     const acts = el('div', 'acts');
     const ok = el('button', 'pt-send', '보냈어요 — 기록'); ok.type = 'button';
     const cancel = el('button', 'pt-edit', '닫기'); cancel.type = 'button';
     acts.append(ok, cancel);
-    box.append(amt, memo, err, acts);
+    box.append(amt, quote, memo, err, acts);
     panel.appendChild(box);
     cancel.onclick = () => panel.replaceChildren();
     ok.onclick = async () => {
       const v = Math.round(num(amt.value) * 100) / 100;
       if (!(v > 0)) { err.textContent = '금액을 확인해 주세요'; return; }
-      if (!confirm(p.name + ' 에게 센트비로 ' + usd(v) + ' 보냈나요?\n\n(받을 금액 ' + usd(p.owedUsd) + ' · ' + (NAMES[p._app] || p._app) + ')')) return;
+      const sv = sendOf(p, v);
+      if (!(sv > 0)) { err.textContent = '수수료(' + usd(fee) + ')보다 적어서 이월이에요'; return; }
+      if (!confirm(p.name + ' 에게 센트비로 실제 송금 ' + usd(sv) + '(수수료 ' + usdS(fee) + ' 차감) 보냈나요?\n\n정산 기록 ' + usd(v) + ' (받을 금액 ' + usd(p.owedUsd) + ' · ' + (NAMES[p._app] || p._app) + ')')) return;
       ok.disabled = true; err.textContent = '';
       try {
         const r = await api(p._app, '/' + encodeURIComponent(p.id) + '/payouts', 'POST', { amountUsd: v, note: memo.value.trim() || undefined, idemKey: key });
