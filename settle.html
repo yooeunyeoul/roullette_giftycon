@@ -26,6 +26,7 @@
   · 키: 에어타임 캐시드릴 전용(settle.key.air.cashdrill, 송금하려면 캐시드릴 ADMIN_API_KEY) → 없으면 출금 정산 캐시드릴 키(정산 키, 목록·거절만).
   2026-11-11 🤝 파트너 수수료 — 카드 = 받을 금액 / 수수료(서버 feeUsd = 유저 현금 출금 나라별 feeCents) / 보낼 금액(크게·[복사]).
     [보냄]은 정산 금액(받을 금액)을 기록하고 메모에 '수수료 $4 차감·수취 $X' 자동. 받을 ≤ 수수료면 회색 '이월'(보냄 잠금).
+  2026-11-11 💵 [완료] 메모칸 제거 — 확인/취소 다이얼로그 하나. [송금 보냄]·[완료] 뒤 누른 카드 화면 위치 유지(keepPos).
   2026-11-11 🤝 파트너 정산 모드 — 창작자 파트너 받을 금액·센트비 은행 정보 [복사]·[보냄](기록만, method=sentbe, idemKey 중복 방지)·[지급 정보 수정].
     rf /admin/partners/payout-sheet · 캐시드릴 /api/v1/settlement/partners/payout-sheet (정산 키). 페이팔 종료 — 메일 연락처는 경고로만.
   2026-10-29 골드스텝(GoldManbo) 탭 — 원화 계좌이체만(한국 전용). 골드스텝 백엔드 goldmanbo-backend GET /api/v1/admin/withdraw?status=PENDING ·
@@ -1752,7 +1753,7 @@
       const res = await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/sent', 'POST', { appId: rowApp(w), sent: sent }, rowKey(w));
       w.sentAt = sent ? (res.sentAt || new Date().toISOString()) : null;
       rows.forEach(x => { if (x.id === w.id && x._src === w._src) x.sentAt = w.sentAt; });
-      c.replaceWith(card(w));
+      keepPos(c, () => c.replaceWith(card(w)));
       renderSum(null);
       toast(sent ? '📤 송금 보냄 기록 (유저 알림 없음)' : '보냄 취소');
     } catch (e) {
@@ -1796,36 +1797,32 @@
       + '\n\n확인을 누르면 완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.';
   }
 
-  function openComplete(w, c, panel) {
+  // 11/11 오너: 메모 입력칸 없앤다(센트비 번호 복사도 안 돼 못 쓴다) — [완료] = 확인/취소 다이얼로그 하나.
+  async function openComplete(w, c, panel) {
     if (w.payoutBlocked === true) { alert('차단 계정이라 완료할 수 없어요. 보내지 마세요.'); return; }
-    panel.replaceChildren(); panel.classList.remove('hidden');
-    const memo = el('input'); memo.type = 'text'; memo.placeholder = '메모 (선택 · 예: 센트비 거래번호)'; memo.maxLength = 500;
-    const acts = el('div', 'acts');
-    const cancel = el('button', 'restore', '닫기'); cancel.type = 'button';
-    const go = el('button', 'ok', '완료 확정'); go.type = 'button';
-    cancel.onclick = () => panel.classList.add('hidden');
-    go.onclick = async () => {
-      const notSent = cpNotSentWarn(w);
-      if (!confirm(window.__holdWarn(normRisk(w.risk)) + (notSent || ('입금이 확인됐나요?\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.')))) return;
-      go.disabled = cancel.disabled = true;
-      c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
-      try {
-        const body = { appId: rowApp(w) };
-        if (memo.value.trim()) body.note = memo.value.trim();
-        await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/complete', 'POST', body, rowKey(w));
-        collapse(w, c, 'ok', '✅ 완료 기록');
-        toast('완료 처리됨');
-      } catch (e) {
-        alert('완료 실패: ' + e.message);
-        go.disabled = cancel.disabled = false;
-        c.querySelectorAll('.acts .fail').forEach(b => b.disabled = false);
-        c.querySelectorAll('.acts .ok').forEach(b => b.disabled = w.payoutBlocked === true || e.code === 'payout_blocked');
-        if (e.httpStatus === 409 && e.code !== 'payout_blocked') load();
-      }
-    };
-    acts.append(cancel, go);
-    panel.append(memo, acts);
-    memo.focus();
+    const notSent = cpNotSentWarn(w);
+    if (!confirm(window.__holdWarn(normRisk(w.risk)) + (notSent || ('입금이 확인됐나요?\n\n' + summaryLine(w) + '\n\n완료로 기록하고 유저에게 "송금 완료" 푸시가 갑니다.')))) return;
+    c.querySelectorAll('.acts button').forEach(b => b.disabled = true);
+    try {
+      await api(rowBase(w) + '/' + encodeURIComponent(w.id) + '/complete', 'POST', { appId: rowApp(w) }, rowKey(w));
+      keepPos(c, () => collapse(w, c, 'ok', '✅ 완료 기록'));
+      toast('완료 처리됨');
+    } catch (e) {
+      alert('완료 실패: ' + e.message);
+      c.querySelectorAll('.acts .fail').forEach(b => b.disabled = false);
+      c.querySelectorAll('.acts .ok').forEach(b => b.disabled = w.payoutBlocked === true || e.code === 'payout_blocked');
+      if (e.httpStatus === 409 && e.code !== 'payout_blocked') load();
+    }
+  }
+
+  // 11/11 오너 "보냄 누르면 가끔 포인터 위치가 바뀐다" — 카드를 다시 그리면 높이가 바뀌어(보류·차단 줄이 사라짐)
+  //   화면이 밀린다. 누른 카드의 화면상 위치를 그대로 유지한다.
+  function keepPos(c, fn) {
+    const top0 = c.getBoundingClientRect().top;
+    const prev = c.previousElementSibling, parent = c.parentNode;
+    fn();
+    const now = prev ? prev.nextElementSibling : (parent && parent.firstElementChild);
+    if (now) window.scrollBy(0, now.getBoundingClientRect().top - top0);
   }
 
   function openReject(w, c, panel) {
