@@ -26,6 +26,7 @@
   · 키: 에어타임 캐시드릴 전용(settle.key.air.cashdrill, 송금하려면 캐시드릴 ADMIN_API_KEY) → 없으면 출금 정산 캐시드릴 키(정산 키, 목록·거절만).
   2026-11-11 🤝 파트너 수수료 — 카드 = 받을 금액 / 수수료(서버 feeUsd = 유저 현금 출금 나라별 feeCents) / 보낼 금액(크게·[복사]).
     [보냄]은 정산 금액(받을 금액)을 기록하고 메모에 '수수료 $4 차감·수취 $X' 자동. 받을 ≤ 수수료면 회색 '이월'(보냄 잠금).
+  2026-11-11 📱 통신비 [🔗 전체 앱] — rf 네 앱 + 캐시드릴 대기를 한 목록(카드마다 앱 배지), 승인·거절·보류·차단은 건마다 자기 서버·appId·키, 🟢 전체 승인도 합친 목록에서 한 번에(지갑 rf/캐시드릴 잔액 따로 검사).
   2026-11-11 💵 [완료] 메모칸 제거 — 확인/취소 다이얼로그 하나. [송금 보냄]·[완료] 뒤 누른 카드 화면 위치 유지(keepPos).
   2026-11-11 🤝 파트너 정산 모드 — 창작자 파트너 받을 금액·센트비 은행 정보 [복사]·[보냄](기록만, method=sentbe, idemKey 중복 방지)·[지급 정보 수정].
     rf /admin/partners/payout-sheet · 캐시드릴 /api/v1/settlement/partners/payout-sheet (정산 키). 페이팔 종료 — 메일 연락처는 경고로만.
@@ -271,6 +272,7 @@
   <!-- 📱 에어타임 승인 (2026-10-18) — 파일 맨 아래 두 번째 스크립트만 이 영역을 다룬다. -->
   <div id="airMain" class="hidden">
     <div class="seg" id="airAppSeg">
+      <button data-air-app="all">🔗 전체 앱</button>
       <button data-air-app="cashdrill">캐시드릴</button>
       <button data-air-app="com.rewardfactory.cashfi" class="on">캐시파이</button>
       <button data-air-app="com.rewardfactory.cashstep">캐시스텝</button>
@@ -924,7 +926,10 @@
   'use strict';
   const BASE = 'https://reward-factory-backend.fly.dev';
   const CD_BASE = 'https://cashdrill-backend.fly.dev/api/v1/settlement/airtime';
-  const NAMES = { 'cashdrill': '캐시드릴', 'com.rewardfactory.cashfi': '캐시파이', 'com.rewardfactory.cashstep': '캐시스텝', 'com.rewardfactory.gold': '돈캐드릴', 'com.rewardfactory.wakebox': '웨이크박스' };
+  const NAMES = { 'all': '전체 앱', 'cashdrill': '캐시드릴', 'com.rewardfactory.cashfi': '캐시파이', 'com.rewardfactory.cashstep': '캐시스텝', 'com.rewardfactory.gold': '돈캐드릴', 'com.rewardfactory.wakebox': '웨이크박스' };
+  // ★ 2026-11-11 🔗 전체 앱(오너 "앱마다 들어가 확인하는 게 귀찮다") — 💵 현금처럼 rf 네 앱 + 캐시드릴 대기를 한 목록에.
+  //   카드·버튼은 전부 **그 건의 앱(w._app)** 기준으로 서버·appId·키를 고른다(전역 appId 는 '목록을 어디서 불러올지'만).
+  const AIR_APPS = ['cashdrill', 'com.rewardfactory.cashfi', 'com.rewardfactory.cashstep', 'com.rewardfactory.gold', 'com.rewardfactory.wakebox'];
   const $ = (id) => document.getElementById(id);
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   const usd = (c) => '$' + (Number(c) / 100).toFixed(2);   // 금액은 센트
@@ -932,26 +937,40 @@
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (_) { return null; } }
   // 키: 에어타임 전용(어드민 키 권장) → 없으면 rf 정산 키(캐시파이·캐시스텝·돈캐드릴 순) — 그 키면 목록·거절만.
   //   캐시드릴은 백엔드가 달라 키도 따로: 에어타임 캐시드릴 전용 → 없으면 출금 정산 캐시드릴 키(정산 키).
+  const isAll = () => appId === 'all';
   const isCD = () => appId === 'cashdrill';
+  const keyCdOf = () => ls('settle.key.air.cashdrill') || ls('settle.key.cashdrill') || '';
+  const keyRfOf = () => ls('settle.key.air') || ls('settle.key.cashfi') || ls('settle.key.cashstep') || ls('settle.key.gold') || '';
+  const keyFor = (a) => a === 'cashdrill' ? keyCdOf() : keyRfOf();
+  // 🔑 저장 칸: 전체 앱 화면에선 rf 키(캐시드릴 키는 [캐시드릴] 을 골라 저장).
   const airKeySlot = () => isCD() ? 'settle.key.air.cashdrill' : 'settle.key.air';
-  const airKey = () => isCD()
-    ? (ls('settle.key.air.cashdrill') || ls('settle.key.cashdrill') || '')
-    : (ls('settle.key.air') || ls('settle.key.cashfi') || ls('settle.key.cashstep') || ls('settle.key.gold') || '');
+  const airKey = () => isAll() ? (keyRfOf() || keyCdOf()) : keyFor(appId);
   // 서버 주소: rf 는 appId 로 앱을 고르고, 캐시드릴은 단일 앱 백엔드라 appId 를 보내도 무시한다.
-  const listUrl = () => isCD()
+  const listUrlFor = (a) => a === 'cashdrill'
     ? CD_BASE + '?status=' + status
-    : BASE + '/admin/airtime?appId=' + encodeURIComponent(appId) + '&status=' + status;
-  const actUrl = (id, act) => (isCD() ? CD_BASE : BASE + '/admin/airtime') + '/' + encodeURIComponent(id) + '/' + act;
+    : BASE + '/admin/airtime?appId=' + encodeURIComponent(a) + '&status=' + status;
+  const actUrlFor = (a, id, act) => (a === 'cashdrill' ? CD_BASE : BASE + '/admin/airtime') + '/' + encodeURIComponent(id) + '/' + act;
+  // 건 단위: 그 건의 앱으로 보낸다.
+  const appOf = (w) => w._app || appId;
+  const callFor = (w, act, body) => api(actUrlFor(appOf(w), w.id, act), 'POST', Object.assign({ appId: appOf(w) }, body || {}), keyFor(appOf(w)));
+  // 송금 가능 여부는 서버(키)마다 다르다 — rf 키가 어드민이어도 캐시드릴 키는 정산 키일 수 있다.
+  let canSendBy = {};
+  const canSendOf = (w) => canSendBy[appOf(w)] === true;
+  const acctOf = (w) => appOf(w) === 'cashdrill' ? 'cd' : 'rf';   // 리로들리 지갑(계정)은 서버별
   let t;
   function toast(msg) { const e = $('toast'); e.textContent = msg; e.classList.add('show'); clearTimeout(t); t = setTimeout(() => e.classList.remove('show'), 1400); }
 
-  let appId = ls('settle.air.app') || 'com.rewardfactory.cashfi';
-  if (!NAMES[appId]) appId = 'com.rewardfactory.cashfi';
+  let appId = ls('settle.air.app') || 'all';
+  if (!NAMES[appId]) appId = 'all';
+  // 11/11 전체 앱 도입 — 한 번은 전체 앱으로 열어 준다(이후엔 마지막 선택 기억).
+  if (!ls('settle.air.allv1')) { appId = 'all'; ls('settle.air.allv1', '1'); }
   let status = 'PENDING';
   let loadSeq = 0;   // 앱을 바꾼 뒤 늦게 도착한 이전 앱 응답은 버린다
   let canSend = false;
   // 대기 탭 요약줄(지갑 잔액 · 대기 N건 $합계)을 처리할 때마다 다시 그리려고 들고 있는다.
   let balanceUsd = null;
+  let balBy = {};   // { rf: $, cd: $ } — 전체 앱 화면에서 지갑별 잔액
+  let loadErrs = [];
   let pendingLeft = [];
   // 연타·겹침 방지(10/30): 개별 승인이 날아가는 중인 id, 일괄 승인 진행 여부.
   //   ⚠️ 일괄 중엔 개별 승인·거절·불러오기·앱/상태 전환을 막고, 개별이 날아가는 중엔 일괄을 못 시작한다.
@@ -959,10 +978,10 @@
   let batching = false;
   let batchStop = false;
 
-  async function api(url, method, body) {
+  async function api(url, method, body, key) {
     const res = await fetch(url, {
       method: method || 'GET',
-      headers: Object.assign({ 'Authorization': 'Bearer ' + airKey() }, body ? { 'Content-Type': 'application/json' } : {}),
+      headers: Object.assign({ 'Authorization': 'Bearer ' + (key || airKey()) }, body ? { 'Content-Type': 'application/json' } : {}),
       body: body ? JSON.stringify(body) : undefined,
     });
     let data = null;
@@ -1008,6 +1027,7 @@
     c.appendChild(amt);
     c.appendChild(el('div', 'acct', (w.productType === 'data' ? '📶 데이터 · ' + (w.planDescription || '') + ' · ' : '') + (w.countryCode || '??') + ' · ' + (w.operatorName || '통신사 미확인')));
     c.appendChild(el('div', 'holder', '📞 ' + (w.phone || '')));
+    if (isAll()) { const bd = el('div', 'meta'); bd.appendChild(el('span', 'cp-badge cp-app', NAMES[appOf(w)] || appOf(w))); c.appendChild(bd); }
     c.appendChild(el('div', 'meta', '신청 ' + when(w.createdAt) + ' · 유저 ' + String(w.userId || '').slice(0, 8)
       + (w.completedAt ? ' · 종결 ' + when(w.completedAt) : '')));
     if (w.status !== 'PENDING' && (w.reloadlyStatus || w.reloadlyTransactionId || w.errorMessage)) c.appendChild(resultBox(w));
@@ -1021,8 +1041,10 @@
       { const r0v = normRisk(w.risk); window.__SV.verdict(c, { id: w.id, pending: true, blocked: w.payoutBlocked === true, held: held, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '거절');
-      const bo = el('button', 'ok', canSend && !held ? '승인 (송금)' : '승인 🔒');
-      bo.disabled = !canSend || held;
+      const cs = canSendOf(w);
+      const bo = el('button', 'ok', cs && !held ? '승인 (송금)' : '승인 🔒');
+      bo.disabled = !cs || held;
+      if (!cs) bo.dataset.nosend = '1';
       bf.onclick = () => reject(w, c, [bf, bo]);
       bo.onclick = () => approve(w, c, [bf, bo]);
       acts.append(bf, bo);
@@ -1050,14 +1072,14 @@
     const others = pendingLeft.filter(x => x.userId === w.userId && x.id !== w.id).length;
     const why = r && r.reasons.length ? '\n\n위험 사유:\n' + r.reasons.map(t => '· ' + t).join('\n') : '';
     if (!confirm('🚫 이 유저를 출금 차단하고 반려할까요?\n\n' + usd(w.amountUsd) + ' · ' + (w.countryCode || '??') + ' · 📞 ' + (w.phone || '')
-      + '\n유저 ' + String(w.userId || '').slice(0, 8) + ' · ' + NAMES[appId] + (r ? ' · ' + RISK[r.level] : '') + why
+      + '\n유저 ' + String(w.userId || '').slice(0, 8) + ' · ' + NAMES[appOf(w)] + (r ? ' · ' + RISK[r.level] : '') + why
       + '\n\n· 이 건 반려 + 캐시 ' + Number(w.cashDeducted || 0).toLocaleString('ko-KR') + ' 환불'
       + '\n· 이 유저의 다른 대기 통신비·현금·페이팔도 반려·환불' + (others ? ' (이 화면 ' + others + '건 포함)' : '')
       + '\n· 앞으로 출금 신청 불가(해제는 어드민 unflag)')) return;
     btns.forEach(b => b.disabled = true);
     inflight.add(w.id); renderBatchBtn();
     try {
-      const res = await api(actUrl(w.id, 'block-reject'), 'POST', { appId: appId });
+      const res = await callFor(w, 'block-reject');
       const o = res.otherRejected || {};
       const n = (res.item && res.item.result === 'rejected' ? 1 : 0) + Number(o.airtime || 0) + Number(o.cash || 0) + Number(o.paypal || 0);
       const head = (res.status === 'already_blocked' ? '🚫 이미 차단됨' : '🚫 차단') + ' + 반려 ' + n + '건';
@@ -1076,7 +1098,7 @@
     } catch (e) {
       alert('차단+반려 실패: ' + e.message);
       btns.forEach(b => b.disabled = false);
-      if (!canSend) btns[1].disabled = true;
+      if (!canSendOf(w)) btns[1].disabled = true;
     } finally {
       inflight.delete(w.id); renderBatchBtn();
     }
@@ -1089,19 +1111,19 @@
     if (hold) {
       const r = normRisk(w.risk);
       const v = prompt('⏸ 보류할까요? (유저 알림·환불 없음, 신청은 대기 그대로)\n\n' + usd(w.amountUsd) + ' · ' + (w.countryCode || '??') + ' · 📞 ' + (w.phone || '')
-        + '\n유저 ' + String(w.userId || '').slice(0, 8) + ' · ' + NAMES[appId] + '\n\n사유(선택):', r && r.reasons.length ? r.reasons[0].slice(0, 120) : '');
+        + '\n유저 ' + String(w.userId || '').slice(0, 8) + ' · ' + NAMES[appOf(w)] + '\n\n사유(선택):', r && r.reasons.length ? r.reasons[0].slice(0, 120) : '');
       if (v === null) return;
       reason = v.trim() || undefined;
     }
     btns.forEach(b => b.disabled = true);
     try {
-      await api(actUrl(w.id, 'hold'), 'POST', { appId: appId, hold: hold, reason: reason });
+      await callFor(w, 'hold', { hold: hold, reason: reason });
       toast(hold ? '⏸ 보류 (유저 알림 없음)' : '▶ 보류 해제');
       load();   // 보류 구역·대기 합계·🟢 전체 승인이 바뀐다 — 다시 그린다
     } catch (e) {
       alert((hold ? '보류' : '보류 해제') + ' 실패: ' + e.message + (e.httpStatus === 404 ? '\n(서버가 아직 이 기능을 모를 수 있어요 — 배포 전)' : ''));
       btns.forEach(b => b.disabled = false);
-      if (!canSend || w.heldAt) btns[1].disabled = true;
+      if (!canSendOf(w) || w.heldAt) btns[1].disabled = true;
       if (e.httpStatus === 409) load();
     }
   }
@@ -1109,12 +1131,12 @@
   async function approve(w, c, btns) {
     if (batching || inflight.has(w.id)) return;
     if (w.heldAt) { alert('⏸ 보류 중인 건이에요 — [▶ 보류 해제] 뒤에 승인하세요.'); return; }
-    if (!canSend) { alert('정산 키로는 송금할 수 없어요. 🔑 에 어드민 키를 넣어 주세요.'); return; }
-    if (!confirm(window.__holdWarn(normRisk(w.risk)) + '리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.productType === 'data' ? '📶 데이터 ' + (w.planDescription || '') + '\n' : '') + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
+    if (!canSendOf(w)) { alert(NAMES[appOf(w)] + ' — 정산 키로는 송금할 수 없어요. 🔑 에 어드민 키를 넣어 주세요.'); return; }
+    if (!confirm(window.__holdWarn(normRisk(w.risk)) + (isAll() ? '[' + NAMES[appOf(w)] + '] ' : '') + '리로들리로 ' + usd(w.sentUsd ?? w.amountUsd) + ' 실제 송금됩니다.\n' + (w.productType === 'data' ? '📶 데이터 ' + (w.planDescription || '') + '\n' : '') + (w.countryCode || '') + ' · ' + (w.operatorName || '') + ' · ' + (w.phone || '') + '\n\n되돌릴 수 없어요. 보낼까요?')) return;
     btns.forEach(b => b.disabled = true);
     inflight.add(w.id); renderBatchBtn();
     try {
-      const r = await api(actUrl(w.id, 'approve'), 'POST', { appId: appId });
+      const r = await callFor(w, 'approve');
       const head = r.status === 'COMPLETED' ? '✅ 송금 성공' : r.status === 'FAILED' ? '❌ 송금 실패 — 캐시 환불됨' : '⏳ 처리중 — [처리중] 탭에서 결과 확인';
       collapse(w, c, r.status === 'COMPLETED' ? 'ok' : r.status === 'FAILED' ? 'bad' : 'wait',
         head + (r.status === 'FAILED' && r.errorMessage ? ' · ' + r.errorMessage : ''));
@@ -1123,7 +1145,7 @@
       // ⚠️ 응답을 못 받았으면 송금됐는지 모른다. 다시 누르지 말고 '처리중' 탭으로 확인(서버도 두 번은 안 보낸다 — 409).
       alert('승인 결과를 받지 못했어요: ' + e.message + '\n\n다시 누르지 말고 목록을 새로 불러 "처리중/완료" 탭에서 확인해 주세요.');
       btns.forEach(b => b.disabled = false);
-      if (!canSend) btns[1].disabled = true;
+      if (!canSendOf(w)) btns[1].disabled = true;
     } finally {
       inflight.delete(w.id); renderBatchBtn();
     }
@@ -1136,13 +1158,13 @@
     if (!reason.trim()) { alert('거절 사유를 입력해 주세요'); return; }
     btns.forEach(b => b.disabled = true);
     try {
-      const r = await api(actUrl(w.id, 'reject'), 'POST', { appId: appId, reason: reason.trim() });
+      const r = await callFor(w, 'reject', { reason: reason.trim() });
       collapse(w, c, 'bad', '거절됨 — 캐시 ' + Number(r.refunded || 0).toLocaleString('ko-KR') + ' 환불');
       toast('거절 + 환불');
     } catch (e) {
       alert('거절 실패: ' + e.message);
       btns.forEach(b => b.disabled = false);
-      if (!canSend) btns[1].disabled = true;
+      if (!canSendOf(w)) btns[1].disabled = true;
     }
   }
 
@@ -1157,12 +1179,20 @@
 
   function renderBal() {
     const bal = $('airBal'); bal.replaceChildren(); bal.classList.remove('hidden');
-    bal.appendChild(document.createTextNode('리로들리 지갑 '));
-    bal.appendChild(el('b', null, balanceUsd == null ? '조회 실패' : '$' + Number(balanceUsd).toFixed(2)));
+    const fmtB = (v) => v == null ? '조회 실패' : '$' + Number(v).toFixed(2);
+    if (isAll()) {
+      // rf·캐시드릴 리로들리 계정이 같으면(같은 잔액) 한 번만, 다르면 둘 다.
+      bal.appendChild(document.createTextNode('리로들리 지갑 '));
+      bal.appendChild(el('b', null, fmtB(balBy.rf)));
+      if (balBy.cd !== undefined && Number(balBy.cd) !== Number(balBy.rf)) { bal.appendChild(document.createTextNode(' · 캐시드릴 ')); bal.appendChild(el('b', null, fmtB(balBy.cd))); }
+    } else {
+      bal.appendChild(document.createTextNode('리로들리 지갑 '));
+      bal.appendChild(el('b', null, fmtB(balanceUsd)));
+    }
     if (status === 'PENDING') {
       const sum = pendingLeft.reduce((a, w) => a + Number(w.sentUsd ?? w.amountUsd ?? 0), 0);
       bal.appendChild(document.createTextNode(' · 대기 ' + pendingLeft.length + '건 ' + usd(sum)));
-      if (balanceUsd != null && sum / 100 > Number(balanceUsd)) bal.appendChild(el('div', 'warn', '⚠️ 대기 합계가 지갑 잔액보다 커요 — 충전 전엔 일부가 실패합니다'));
+      if (!isAll() && balanceUsd != null && sum / 100 > Number(balanceUsd)) bal.appendChild(el('div', 'warn', '⚠️ 대기 합계가 지갑 잔액보다 커요 — 충전 전엔 일부가 실패합니다'));
       const rs = pendingLeft.map(w => normRisk(w.risk)).filter(Boolean);
       if (rs.length) {
         const n = { green: 0, yellow: 0, red: 0, unknown: 0 };
@@ -1171,7 +1201,14 @@
           .reduce((a, w) => a + Number(w.sentUsd ?? w.amountUsd ?? 0), 0);
         bal.appendChild(el('div', null, '🟢 ' + n.green + ' (' + usd(g) + ') · 🟡 ' + n.yellow + ' · 🔴 ' + n.red + (n.unknown ? ' · ⚪ ' + n.unknown : '')));
       }
+      if (isAll()) {
+        const byApp = {};
+        pendingLeft.forEach(w => { byApp[appOf(w)] = (byApp[appOf(w)] || 0) + 1; });
+        const parts = AIR_APPS.filter(a => byApp[a]).map(a => NAMES[a] + ' ' + byApp[a]);
+        if (parts.length) bal.appendChild(el('div', null, parts.join(' · ')));
+      }
     }
+    if (loadErrs.length) bal.appendChild(el('div', 'warn', '⚠️ 못 불러온 앱: ' + loadErrs.join(' · ')));
     renderBatchBtn();
   }
 
@@ -1188,13 +1225,13 @@
   //     · 409(이미 처리됨)·404·리로들리 송금 실패(환불됨) → 그 건만 실패 목록에 넣고 계속
   //   끝나면 목록을 **한 번만** 다시 불러온다(잔액·남은 건 갱신).
   // ★ 11/08 보류 건은 🟢 여도 일괄 승인에 넣지 않는다(보내지 않기로 한 돈).
-  const isGreen = (w) => { if (w.heldAt) return false; const r = normRisk(w.risk); return !!r && r.level === 'green'; };
+  const isGreen = (w) => { if (w.heldAt || !canSendOf(w)) return false; const r = normRisk(w.risk); return !!r && r.level === 'green'; };
   const amtOf = (w) => Number(w.sentUsd ?? w.amountUsd ?? 0);
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   function renderBatchBtn() {
     const row = $('airBatchRow'), btn = $('airBatchBtn');
     if (batching) return;   // 진행 중엔 진행률이 버튼 글자를 쓴다
-    const greens = status === 'PENDING' && canSend ? pendingLeft.filter(isGreen) : [];
+    const greens = status === 'PENDING' ? pendingLeft.filter(isGreen) : [];
     row.classList.toggle('hidden', greens.length === 0);
     $('airBatchStop').classList.add('hidden');
     btn.textContent = '🟢 전체 승인 (' + greens.length + '건 · ' + usd(greens.reduce((a, w) => a + amtOf(w), 0)) + ')';
@@ -1202,7 +1239,7 @@
   }
   function setBusy(on) {
     $('airLoadBtn').disabled = on;
-    document.querySelectorAll('#airList .acts button').forEach(b => { b.disabled = on || (b.classList.contains('ok') && !canSend); });
+    document.querySelectorAll('#airList .acts button').forEach(b => { b.disabled = on || (b.classList.contains('ok') && b.dataset.nosend === '1'); });
   }
   function batchBox(lines, cls) {
     const box = $('airBatchBox'); box.replaceChildren(); box.classList.remove('hidden');
@@ -1210,24 +1247,29 @@
     lines.forEach((l, i) => { if (i) box.appendChild(document.createElement('br')); box.appendChild(document.createTextNode(l)); });   // textContent 만
   }
   async function approveAllGreen() {
-    if (batching || inflight.size || !canSend || status !== 'PENDING') return;
+    if (batching || inflight.size || status !== 'PENDING') return;
     const queue = pendingLeft.filter(isGreen);   // 지금 화면 기준 스냅샷 — 진행 중 새로 생긴 건은 안 넣는다
     if (!queue.length) return;
     const total = queue.reduce((a, w) => a + amtOf(w), 0);
-    const balTxt = balanceUsd == null ? '조회 실패' : '$' + Number(balanceUsd).toFixed(2);
-    const short = balanceUsd != null && total / 100 > Number(balanceUsd);
+    // 지갑(계정)별 잔액·합계 — 전체 앱이면 rf·캐시드릴을 따로 센다.
+    const balOf = (acct) => isAll() ? balBy[acct] : balanceUsd;
+    const accts = [...new Set(queue.map(acctOf))];
+    const totBy = {}; queue.forEach(w => { totBy[acctOf(w)] = (totBy[acctOf(w)] || 0) + amtOf(w); });
+    const balTxt = accts.map(a => (isAll() ? (a === 'cd' ? '캐시드릴 ' : 'rf ') : '') + (balOf(a) == null ? '조회 실패' : '$' + Number(balOf(a)).toFixed(2))).join(' · ');
+    const short = accts.some(a => balOf(a) != null && totBy[a] / 100 > Number(balOf(a)));
+    const appsTxt = isAll() ? AIR_APPS.map(a => [a, queue.filter(w => appOf(w) === a).length]).filter(x => x[1]).map(x => NAMES[x[0]] + ' ' + x[1]).join(' · ') : NAMES[appId];
     if (!confirm('🟢 ' + queue.length + '건 · 합계 ' + usd(total) + ' 를 리로들리로 실제 송금합니다.\n'
-      + NAMES[appId] + ' · 리로들리 잔액 ' + balTxt + '\n'
+      + appsTxt + '\n리로들리 잔액 ' + balTxt + '\n'
       + (short ? '⚠️ 합계가 잔액보다 커요 — 잔액이 모자라는 건 앞에서 멈춥니다.\n' : '')
       + '\n🟡🔴 는 포함하지 않습니다. 한 건씩 차례로 보내고, 되돌릴 수 없어요. 시작할까요?')) return;
 
     batching = true; batchStop = false; setBusy(true);
     const btn = $('airBatchBtn'); btn.disabled = true;
     const stopBtn = $('airBatchStop'); stopBtn.classList.remove('hidden'); stopBtn.disabled = false;
-    let remain = balanceUsd == null ? null : Math.round(Number(balanceUsd) * 100);   // 센트
+    const remainBy = {}; accts.forEach(a => { remainBy[a] = balOf(a) == null ? null : Math.round(Number(balOf(a)) * 100); });   // 센트
     let ok = 0, sent = 0, stopped = '', procRun = 0;
     const failed = [], waiting = [];
-    const label = (w) => usd(amtOf(w)) + ' ' + (w.countryCode || '??') + ' 📞 ' + (w.phone || '');
+    const label = (w) => (isAll() ? '[' + NAMES[appOf(w)] + '] ' : '') + usd(amtOf(w)) + ' ' + (w.countryCode || '??') + ' 📞 ' + (w.phone || '');
     // ★ 10/30 오너: 한 건이 10초 넘게 걸리면 기다리지 않고 다음 건으로 넘어간다. 늦은 건은 서버가 끝까지 처리하고
     //   (PENDING→PROCESSING 조건부 선점이라 이중 송금 없음) 응답이 오면 그 줄을 갱신한다. 동시에 물려 있는 건 최대 3개(늦은 2 + 지금 1) —
     //   늦은 건이 2개면 하나 끝날 때까지 기다린다(리로들리가 느릴 때 요청을 더 쌓지 않게).
@@ -1252,22 +1294,23 @@
       waiting.push(label(w)); setRow(row, 'wait', '⏳ 처리중 — 자동 확인 대기(다시 누르지 마세요)', w);
       if (++procRun >= 3) { stopped = '리로들리 응답 없음 연속 3건 — 리로들리가 느린 상태. 10~20분 뒤 다시 누르세요'; return 'stop'; }
     };
-    const run = (w) => api(actUrl(w.id, 'approve'), 'POST', { appId: appId }).then((r) => ({ r }), (e) => ({ e }));
+    const run = (w) => callFor(w, 'approve').then((r) => ({ r }), (e) => ({ e }));
     try {
       for (let i = 0; i < queue.length && !stopped; i++) {
         const w = queue[i];
         if (batchStop) { stopped = '중지 버튼 — 남은 ' + (queue.length - i) + '건은 안 보냄'; break; }
         while (late.size >= MAX_LATE && !stopped) { btn.textContent = '응답 대기 중(늦은 ' + late.size + '건)…'; await Promise.race(late); }
         if (stopped) break;
-        if (remain != null && amtOf(w) > remain) { stopped = '리로들리 잔액 부족 예상(남은 $' + (remain / 100).toFixed(2) + ') — 충전 뒤 다시 누르세요'; break; }
+        const ac = acctOf(w);
+        if (remainBy[ac] != null && amtOf(w) > remainBy[ac]) { stopped = '리로들리 잔액 부족 예상(' + (isAll() ? (ac === 'cd' ? '캐시드릴 ' : 'rf ') : '') + '남은 $' + (remainBy[ac] / 100).toFixed(2) + ') — 충전 뒤 다시 누르세요'; break; }
         btn.textContent = '송금 중 ' + (i + 1) + '/' + queue.length + ' · ' + usd(amtOf(w)) + (late.size ? ' · 늦은 ' + late.size + '건' : '');
-        sent += amtOf(w); if (remain != null) remain -= amtOf(w);   // 나간 걸로 먼저 잡는다(보수적) — 실패·건너뜀이면 아래서 되돌린다
+        sent += amtOf(w); if (remainBy[ac] != null) remainBy[ac] -= amtOf(w);   // 나간 걸로 먼저 잡는다(보수적) — 실패·건너뜀이면 아래서 되돌린다
         const c = document.querySelector('#airList .card[data-air-id="' + CSS.escape(String(w.id)) + '"]');
         let row = null;
         if (c) row = collapse(w, c, 'wait', '⏳ 송금 중…');
         const p = run(w);
         const first = await Promise.race([p, sleep(SLOW_MS).then(() => null)]);
-        const undo = (o) => { if (o.e || (o.r && o.r.status === 'FAILED')) { sent -= amtOf(w); if (remain != null) remain += amtOf(w); } };
+        const undo = (o) => { if (o.e || (o.r && o.r.status === 'FAILED')) { sent -= amtOf(w); if (remainBy[ac] != null) remainBy[ac] += amtOf(w); } };
         if (first) { undo(first); if (settle(w, row, first.r, first.e) === 'stop') break; await sleep(200); continue; }
         // 10초 넘음 — 기다리지 않고 다음 건. 응답이 오면 그때 반영한다.
         setRow(row, 'wait', '⏳ 응답 늦음(10초+) — 서버가 계속 처리 중', w);
@@ -1295,12 +1338,24 @@
     const btn = $('airLoadBtn'); btn.disabled = true; btn.textContent = '불러오는 중…';
     const seq = ++loadSeq;
     try {
-      const r = await api(listUrl());
+      // 전체 앱: 다섯 앱을 동시에 불러와 합친다. 키 없는 서버·실패한 앱은 건너뛰고 경고줄에 남긴다(전부 실패면 오류).
+      const apps = isAll() ? AIR_APPS : [appId];
+      const res = await Promise.all(apps.map(a => {
+        if (!keyFor(a)) return Promise.resolve({ a, e: new Error('키 없음') });
+        return api(listUrlFor(a), 'GET', undefined, keyFor(a)).then(r => ({ a, r }), e => ({ a, e }));
+      }));
       if (seq !== loadSeq) return;
-      canSend = r.canSend === true;
-      $('airNoSend').classList.toggle('hidden', canSend);
-      const list = (r.withdrawals || []).slice();
-      balanceUsd = r.balanceUsd;
+      const okRes = res.filter(x => x.r);
+      if (!okRes.length) throw (res[0] && res[0].e) || new Error('불러오기 실패');
+      loadErrs = res.filter(x => x.e).map(x => NAMES[x.a] + '(' + x.e.message + ')');
+      canSendBy = {}; balBy = {};
+      okRes.forEach(x => { canSendBy[x.a] = x.r.canSend === true; const ac = x.a === 'cashdrill' ? 'cd' : 'rf'; if (balBy[ac] == null) balBy[ac] = x.r.balanceUsd; });
+      canSend = okRes.some(x => x.r.canSend === true);
+      $('airNoSend').classList.toggle('hidden', okRes.every(x => x.r.canSend === true));
+      const list = [];
+      okRes.forEach(x => (x.r.withdrawals || []).forEach(w => { w._app = x.a; list.push(w); }));
+      balanceUsd = isAll() ? null : okRes[0].r.balanceUsd;
+      if (isAll()) list.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
       // ★ 11/08 보류 건은 맨 아래 '보내지 마세요' 구역 — 대기 합계·🟢 전체 승인(pendingLeft)에서도 뺀다.
       if (status === 'PENDING') list.sort((a, b) => (!!a.heldAt - !!b.heldAt));
       pendingLeft = status === 'PENDING' ? list.filter(w => !w.heldAt) : [];
@@ -1321,11 +1376,11 @@
   function setAirApp(a) {
     if (batching) { toast('일괄 승인 중 — 끝난 뒤 바꿔 주세요'); return; }
     appId = a; ls('settle.air.app', a);
-    loadSeq++; canSend = false; pendingLeft = []; balanceUsd = null;
+    loadSeq++; canSend = false; canSendBy = {}; pendingLeft = []; balanceUsd = null; balBy = {}; loadErrs = [];
     $('airNoSend').classList.add('hidden');
     $('airKeyInput').placeholder = a === 'cashdrill'
       ? '캐시드릴 에어타임 키 — 송금하려면 캐시드릴 어드민 키'
-      : '에어타임 키 — 송금하려면 어드민 키';
+      : a === 'all' ? 'rf 에어타임 키 (캐시드릴 키는 [캐시드릴]에서 저장)' : '에어타임 키 — 송금하려면 어드민 키';
     document.querySelectorAll('#airAppSeg button').forEach(b => b.classList.toggle('on', b.dataset.airApp === a));
     $('airList').replaceChildren(el('div', 'empty', NAMES[a] + ' — 불러오기를 눌러 주세요'));
     $('airBal').classList.add('hidden');
