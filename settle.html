@@ -113,6 +113,12 @@
   .cp-sentbar { margin:8px 0 4px; padding:8px 10px; border-radius:8px; background:rgba(59,130,246,.15); color:#bcd0ff; font-size:13px; font-weight:700; }
   .cp-divider { margin:18px 0 8px; padding:8px 10px; border-radius:8px; background:#1e293b; color:#bcd0ff; font-weight:800; }
   .acts .blk { background:transparent; border:1px solid var(--bad); color:var(--bad); padding:10px; font-size:14px; }
+  /* ✏️ 유저 정보 수정(11/15, 서버 140) — 보라 테두리 + 바뀐 칸 전(빨강 취소선)/후(초록) */
+  .cp-edited { margin:8px 0 4px; padding:8px 10px; border-radius:8px; background:rgba(168,85,247,.18); color:#e9d5ff; font-size:13px; font-weight:800; }
+  .card.isedited { border:2px solid #a855f7; }
+  .cp-f.changed { background:#2b2140; outline:1px solid #a855f7; }
+  .cp-f .was { display:block; font-size:12px; color:#f87171; text-decoration:line-through; font-family:ui-monospace, Menlo, monospace; }
+  .cp-f .now { display:block; font-size:15px; color:#86efac; font-weight:700; }
   .acts .blk.strong { background:#991b1b; color:#fff; padding:13px; font-size:15px; }
   /* 📱 에어타임 승인(2026-10-18) */
   #modeSeg button.on { background:#2a3550; color:#fff; border-color:#4f7cff; }
@@ -1654,6 +1660,14 @@
     badges.appendChild(el('span', 'cp-badge ' + method, method === 'gcash' ? 'GCash' : method === 'bank' ? '🏦 은행' : String(w.method || '방법 미상')));
     if (isAll()) badges.appendChild(el('span', 'cp-badge cp-app', NAMES[rowApp(w)] || rowApp(w)));
     c.appendChild(badges);
+    // ✏️ 유저가 받는 정보를 고쳤다(11/15 서버 140). 고친 뒤 아직 안 보냈으면 재송금 안내.
+    const le = w.lastEdit && typeof w.lastEdit === 'object' ? w.lastEdit : null;
+    const editedUnsent = num(w.editCount) > 0 && w.status === 'PENDING' && !w.sentAt;
+    if (num(w.editCount) > 0 && le) {
+      c.classList.add('isedited');
+      c.appendChild(el('div', 'cp-edited', '✏️ 유저가 정보 수정함 (' + num(w.editCount) + '/' + (num(w.editMax) || 3) + ') · ' + when(w.editedAt || le.at)
+        + (editedUnsent ? ' — 고친 정보로 센트비 재송금 후 [송금 보냄]' : '')));
+    }
 
     // 금액: 실지급액(USD) 크게 + 현지통화 크게, 신청액·수수료는 작게
     const amt = el('div', 'amt', usd(w.netCents));
@@ -1674,7 +1688,23 @@
       const v = rc[k];
       if (skipField(rc, k) || v == null || String(v).trim() === '') return;
       any = true;
-      fields.appendChild(field(k, label, String(v), w.country || ''));
+      const node = field(k, label, String(v), w.country || '');
+      // ✏️ 마지막 수정에서 바뀐 칸: 전(취소선)·후(초록). 복사는 새 값.
+      const before = le && le.before && typeof le.before === 'object' ? le.before[k] : undefined;
+      if (le && before !== undefined && String(before) !== String(v)) {
+        const f = node.classList && node.classList.contains('cp-f') ? node : node.querySelector('.cp-f');
+        if (f) {
+          f.classList.add('changed');
+          const kEl = f.querySelector('.k'); if (kEl) kEl.textContent = kEl.textContent + ' ✏️';
+          const vEl = f.querySelector('.v');
+          if (vEl) {
+            const now = el('span', 'now', vEl.firstChild ? vEl.firstChild.textContent : String(v));
+            if (vEl.firstChild && vEl.firstChild.nodeType === 3) vEl.removeChild(vEl.firstChild);
+            vEl.prepend(el('span', 'was', sentbeValue(k, String(before), w.country || '')), now);
+          }
+        }
+      }
+      fields.appendChild(node);
     });
     c.appendChild(fields);
     if (!any) c.appendChild(el('div', 'warn', '수취 정보가 비어 있어요 — 보내지 말고 반려하세요'));
@@ -1703,6 +1733,7 @@
       if (sent) c.classList.add('issent');
       // 🕒 11/15: 보낸 건은 서버가 보냄 14일 뒤 자동 완료한다(CASH_PAYOUT_AUTO_COMPLETE_DAYS). 그 전엔 반려·환불 가능.
       if (sent) { const ad = new Date(new Date(w.sentAt).getTime() + 14 * 864e5); c.appendChild(el('div', 'meta', '🕒 ' + (ad.getMonth() + 1) + '/' + ad.getDate() + ' 자동 완료 (그 전엔 반려·환불 가능)')); }
+      else if (editedUnsent) c.appendChild(el('div', 'meta', '🕒 자동 완료 시계 멈춤 — 다시 [송금 보냄] 누른 날부터 14일'));
       { const r0v = normRisk(w.risk); window.__SV.verdict(c, { id: w.id, pending: true, blocked: blocked, held: held, sent: sent, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '반려');
@@ -1713,11 +1744,12 @@
       bo.onclick = () => openComplete(w, c, panel);
       bf.onclick = () => openReject(w, c, panel);
       // 📤 송금 보냄(11/03) — 센트비로 보낸 직후 누른다. 11/15부터 유저에게 "보냈어요·안 오면 번호 인증 확인" 푸시(건당 1회). 되돌릴 수 있음. 보낸 건은 [보냄 취소].
-      const bs = el('button', sent ? 'unsent' : 'sent', sent ? '보냄 취소' : '📤 송금 보냄');
+      const bs = el('button', sent ? 'unsent' : 'sent', sent ? '보냄 취소' : editedUnsent ? '📤 재송금 보냄' : '📤 송금 보냄');
       bs.type = 'button';
       bs.disabled = (blocked || held) && !sent;
       bs.onclick = () => markSent(w, c, !sent);
-      acts.append(bf, bs, bo);
+      // 고친 뒤 아직 안 보낸 건은 [완료] 없이 [반려]·[재송금 보냄]만(먼저 다시 보내야 한다).
+      if (editedUnsent) acts.append(bf, bs); else acts.append(bf, bs, bo);
       c.append(acts);
       // ⏸ 보류 / ▶ 해제 — 보낸 건·차단 계정엔 없다.
       if (!sent && !blocked && w._src === 'rf') {
