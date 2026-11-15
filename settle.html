@@ -1701,6 +1701,8 @@
       const held = !!w.heldAt && !sent;
       if (held) c.classList.add('isheld');
       if (sent) c.classList.add('issent');
+      // 🕒 11/15: 보낸 건은 서버가 보냄 14일 뒤 자동 완료한다(CASH_PAYOUT_AUTO_COMPLETE_DAYS). 그 전엔 반려·환불 가능.
+      if (sent) { const ad = new Date(new Date(w.sentAt).getTime() + 14 * 864e5); c.appendChild(el('div', 'meta', '🕒 ' + (ad.getMonth() + 1) + '/' + ad.getDate() + ' 자동 완료 (그 전엔 반려·환불 가능)')); }
       { const r0v = normRisk(w.risk); window.__SV.verdict(c, { id: w.id, pending: true, blocked: blocked, held: held, sent: sent, holdReason: (w.holdReason || '') + (held ? ' · ' + when(w.heldAt) : ''), riskLevel: r0v && r0v.level }); }
       const acts = el('div', 'acts');
       const bf = el('button', 'fail', '반려');
@@ -1710,7 +1712,7 @@
       const panel = el('div', 'cp-panel hidden');
       bo.onclick = () => openComplete(w, c, panel);
       bf.onclick = () => openReject(w, c, panel);
-      // 📤 송금 보냄(11/03) — 센트비로 보낸 직후 누른다. 푸시 없음·되돌릴 수 있음. 보낸 건은 [보냄 취소].
+      // 📤 송금 보냄(11/03) — 센트비로 보낸 직후 누른다. 11/15부터 유저에게 "보냈어요·안 오면 번호 인증 확인" 푸시(건당 1회). 되돌릴 수 있음. 보낸 건은 [보냄 취소].
       const bs = el('button', sent ? 'unsent' : 'sent', sent ? '보냄 취소' : '📤 송금 보냄');
       bs.type = 'button';
       bs.disabled = (blocked || held) && !sent;
