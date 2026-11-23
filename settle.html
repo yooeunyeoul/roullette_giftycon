@@ -1672,6 +1672,17 @@
         + (editedUnsent ? ' — 고친 정보로 센트비 재송금 후 [송금 보냄]' : '')));
     }
 
+    // ⚠️ 11/23 오너: 계좌번호가 그 유저 휴대폰 번호로 끝나면 전자지갑(DANA·OVO·GoPay 가상계좌) 의심.
+    //   인도네시아 이력: 성공 24건 중 0건, 이 모양 2건은 둘 다 실패(Syinta CIMB 8059+번호 · GOPAY). 막지 않고 경고만.
+    {
+      const r0 = w.recipient && typeof w.recipient === 'object' ? w.recipient : {};
+      const acct = String(r0.accountNumber || '').replace(/\D/g, '');
+      const ph = String(r0.phoneNumber || '').replace(/\D/g, '').replace(/^(62|63|27|234|84|91|1)/, '').replace(/^0+/, '');
+      if (method === 'bank' && acct && ph.length >= 8 && acct.endsWith(ph.slice(-8))) {
+        c.appendChild(el('div', 'warn', '⚠️ 계좌번호가 휴대폰 번호로 끝나요 — 전자지갑(DANA·OVO·GoPay) 번호일 수 있어요. 센트비 은행 송금은 실패하고 수수료만 날아갑니다. 보내지 말고 [반려 → 수취 정보 오류] 추천.'));
+      }
+    }
+
     // 금액: 실지급액(USD) 크게 + 현지통화 크게, 신청액·수수료는 작게
     const amt = el('div', 'amt', usd(w.netCents));
     amt.appendChild(el('small', null, '실지급'));
