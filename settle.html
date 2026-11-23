@@ -336,6 +336,7 @@
       <button data-cash-status="DENIED">반려</button>
     </div>
     <div class="air-bal hidden" id="cashSum"></div>
+    <input id="cashSearch" type="search" placeholder="🔍 이름·계좌·번호·유저ID 검색" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px 12px;margin:8px 0;font-size:15px;border:1px solid #ccc;border-radius:8px">
     <div id="cashList" class="list"><div class="empty">불러오기를 눌러 주세요</div></div>
   </div>
 
@@ -1906,6 +1907,24 @@
     }
   }
 
+  // 11/23 오너: 검색창 — 카드 글자(이름·계좌·번호·유저ID·은행)에 검색어가 있는 카드만 보인다. 공백·대소문자 무시, 숫자는 하이픈·공백 빼고도 맞춘다.
+  function applyCashSearch() {
+    const inp = $('cashSearch'); const pl = $('cashList'); if (!inp || !pl) return;
+    const q = inp.value.trim().toLowerCase(); const qd = q.replace(/[\s-]/g, '');
+    let shown = 0, total = 0;
+    Array.from(pl.children).forEach(c => {
+      if (c.classList.contains('cp-divider') || c.classList.contains('empty')) { c.style.display = q ? 'none' : ''; return; }
+      total++;
+      const t = (c.textContent || '').toLowerCase(); const td = t.replace(/[\s-]/g, '');
+      const hit = !q || t.includes(q) || (qd && td.includes(qd));
+      c.style.display = hit ? '' : 'none'; if (hit) shown++;
+    });
+    let n = $('cashSearchN');
+    if (!n) { n = el('div', 'cp-sub'); n.id = 'cashSearchN'; inp.insertAdjacentElement('afterend', n); }
+    n.textContent = q ? ('검색 결과 ' + shown + ' / ' + total + '건' + (shown ? '' : ' — 앱을 [🔗 전체 앱]으로 바꿔 보세요')) : '';
+  }
+  document.addEventListener('input', (e) => { if (e.target && e.target.id === 'cashSearch') applyCashSearch(); });
+
   // 11/11 오너 "보냄 누르면 가끔 포인터 위치가 바뀐다" — 카드를 다시 그리면 높이가 바뀌어(보류·차단 줄이 사라짐)
   //   화면이 밀린다. 누른 카드의 화면상 위치를 그대로 유지한다.
   function keepPos(c, fn) {
@@ -2171,7 +2190,8 @@
       //   11/06: 보류(heldAt, 보내지 않은 건) 건은 그보다 더 아래 — 보내지 마세요 구역.
       const heldOf = (w) => !!w.heldAt && !w.sentAt;
       if (status === 'PENDING') list.sort((a, b) => (heldOf(a) - heldOf(b)) || (!!a.sentAt - !!b.sentAt)
-        || (a.sentAt && b.sentAt ? new Date(a.sentAt) - new Date(b.sentAt) : new Date(a.createdAt || 0) - new Date(b.createdAt || 0)));
+        // 11/23 오너: 보낸 건은 **최근에 보낸 게 위로**(센트비 실패 연락은 대개 최근 건).
+        || (a.sentAt && b.sentAt ? new Date(b.sentAt) - new Date(a.sentAt) : new Date(a.createdAt || 0) - new Date(b.createdAt || 0)));
       else if (isAll()) list.sort((a, b) => new Date(b.processedAt || b.createdAt || 0) - new Date(a.processedAt || a.createdAt || 0));
       rows = list.slice();
       renderSum(serverSum);
@@ -2188,6 +2208,7 @@
         try { pl.appendChild(card(w)); } catch (e) { pl.appendChild(el('div', 'air-row bad', '표시 실패 #' + w.id + ' — ' + e.message)); }
       });
       if (!list.length) empty(NAMES[appId] + ' — ' + (status === 'PENDING' ? '대기 건이 없습니다 🎉' : '해당 건이 없습니다'));
+      applyCashSearch();
     } catch (e) {
       if (seq !== loadSeq) return;
       rows = []; $('cashSum').classList.add('hidden');
