@@ -1447,6 +1447,8 @@
     ['name_mismatch', '이름 불일치'],
     ['payout_blocked', '차단 계정'],
     ['other', '기타'],
+    // 11/23 오너: 송금 후 센트비 실패 통보가 유저 수정보다 먼저 옴 → 반려·전액 환불 + 그 유저 현금 출금 잠금(rf 백엔드만 아는 코드).
+    ['transfer_failed', '송금 실패 통보 → 환불 + 현금 출금 잠금'],
   ];
   // 수취 정보 필드 — 순서 = 센트비 입력 순서에 가깝게. 값 있는 것만 그린다.
   const FIELDS = [
@@ -1917,8 +1919,10 @@
   function openReject(w, c, panel) {
     panel.replaceChildren(); panel.classList.remove('hidden');
     const sel = el('select');
-    REASONS.forEach(([v, t]) => { const o = el('option', null, t); o.value = v; sel.appendChild(o); });
+    // transfer_failed 는 rf 백엔드 코드 — 캐시드릴 건엔 안 보인다(모르는 코드는 400).
+    REASONS.filter(([v]) => v !== 'transfer_failed' || w._src !== 'cd').forEach(([v, t]) => { const o = el('option', null, t); o.value = v; sel.appendChild(o); });
     if (w.payoutBlocked === true) sel.value = 'payout_blocked';
+    else if (w._src !== 'cd' && w.sentAt) sel.value = 'transfer_failed';
     const reason = el('input'); reason.type = 'text'; reason.placeholder = '반려 사유 (필수 · 유저에겐 코드만 감)'; reason.maxLength = 500;
     const refund = num(w.cashDeducted);
     const note = el('div', 'warn', '반려하면 캐시 ' + refund.toLocaleString('ko-KR') + ' 이 유저에게 환불됩니다.');
