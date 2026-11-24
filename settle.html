@@ -50,6 +50,7 @@
     실패 건 표시하고 나머지 계속. 수수료는 건마다 그대로(환불 없음). 앱 하나만 고르면 그 앱 안에서만 묶는다.
   2026-11-03 📤 송금 보냄 — 💵 현금 대기 카드. 센트비로 보낸 직후 [📤 송금 보냄] → POST cash-payout/:id/sent {appId, sent?}(푸시 없음, 상태는 대기 그대로·앱은 '처리 중').
     입금 확인 뒤 [완료](이때만 완료 푸시). 보낸 건은 목록 아래 '송금 보냄' 구역으로, 🚫 차단+반려는 숨긴다(이미 돈이 나갔다).
+  2026-11-24 🤖 자동승인 판정 배지 — 📱 통신비 카드에 서버 항목.auto(rf /admin/airtime · 캐시드릴 /settlement/airtime) 를 한 줄로(대상·제외 사유·대기·뒤집힘·자동 송금 결과). 표시 전용.
   2026-11-08 ⏸ 보류 — 📱 통신비 대기 카드(rf 4앱·캐시드릴). [⏸ 보류] → POST <airtime>/:id/hold {appId, hold, reason?}(알림·환불 없음, 상태 대기 그대로). 보류 건은 맨 아래 '보류 — 보내지 마세요' 구역, [승인] 잠금(서버도 409 on_hold), 🟢 전체 승인·대기 합계에서 제외.
   2026-11-06 ⏸ 보류 — 💵 현금 대기 카드. [⏸ 보류] → POST cash-payout/:id/hold {appId, hold, reason?}(푸시·환불 없음, 상태 대기 그대로). 보류 건은 맨 아래 '보류 — 보내지 마세요' 구역, [완료]·[송금 보냄] 잠금(서버도 409 on_hold), 묶음 제외.
   2026-11-03 🚫 차단+반려 — 📱 통신비·💵 현금 대기 카드(전 건, 🔴 카드는 진한 빨강). 위험 사유를 보여 주는 확인창 → POST <airtime|cash-payout>/:id/block-reject {appId}
@@ -143,6 +144,9 @@
   .risk-reasons { margin:6px 0 0; padding:8px 10px 8px 26px; border-radius:8px; background:#20242d; font-size:13px; line-height:1.5; color:var(--text); }
   .risk-reasons li { word-break:break-all; }
   .card.risk-red { border-color:var(--bad); }
+  .autob { margin-top:6px; padding:4px 8px; border-radius:6px; font-size:12px; line-height:1.45; background:#20242d; color:var(--muted); word-break:break-all; }
+  .autob.go { background:rgba(34,197,94,.12); color:var(--ok); font-weight:600; }
+  .autob.bad { background:rgba(239,68,68,.15); color:var(--bad); font-weight:600; }
   #riskBar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 8px; }
   #riskBar .rsum { flex:1 1 100%; font-size:14px; font-weight:700; }
   #riskBar button { flex:1; min-width:0; padding:8px 4px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--muted); font-size:13px; white-space:nowrap; }
@@ -1025,6 +1029,29 @@
   }
   function riskBadge(r, c) { window.__SV.risk(r, c); }   // 11/10 참고 정보(접힘)로 이동
 
+  // ── 🤖 자동승인 판정(2026-11-24) — 서버 항목.auto = { mode, decision, pass, code, reason, flippedAt, attemptedAt, sendResult, sendDetail } (선택).
+  //   표시 전용(버튼·순서·✅ 판정 그대로). dry_run 은 "이 건이면 자동으로 보냈을 것" 일 뿐 실제 송금은 없다.
+  function autoBadge(a, c) {
+    if (!a || typeof a !== 'object') return;
+    const why = a.reason ? ' · ' + String(a.reason) : '';
+    let cls = 'autob', t;
+    if (a.attemptedAt) {
+      if (a.sendResult === 'sent') { cls += ' go'; t = '🤖 자동 송금됨(auto:v1)'; }
+      else if (a.sendResult === 'failed') { cls += ' bad'; t = '🤖 자동 송금 실패 — 수동 처리' + (a.sendDetail ? ' · ' + String(a.sendDetail) : ''); }
+      else { cls += ' bad'; t = '🤖 자동 송금 결과 불명 — 확인 필요(재송금 금지)'; }
+    } else if (a.decision === 'approve') {
+      cls += ' go'; t = '🤖 자동승인 대상' + (a.mode === 'dry_run' ? '(드라이런 — 실제 송금 안 함)' : '') + why;
+    } else if (a.decision === 'wait') {
+      t = '🤖 자동 대기' + why;
+    } else if (a.decision === 'blocked_ops') {
+      t = '🤖 자동 멈춤(운영)' + why;
+    } else {
+      t = '🤖 제외' + (a.reason ? ': ' + String(a.reason) : '');
+    }
+    if (a.flippedAt) t += ' · ↩ 처음엔 통과였다가 재판정에서 제외(' + when(a.flippedAt) + ')';
+    c.appendChild(el('div', cls, t));
+  }
+
   function airCard(w) {
     const c = el('div', 'card');
     c.dataset.airId = String(w.id);
@@ -1040,6 +1067,7 @@
     if (w.status !== 'PENDING' && (w.reloadlyStatus || w.reloadlyTransactionId || w.errorMessage)) c.appendChild(resultBox(w));
     if (w.status === 'COMPLETED' && w.deliveredAmount != null) c.appendChild(el('div', 'meta', '도착 ' + w.deliveredAmount + ' ' + (w.deliveredCurrency || '')));
     if (w.status === 'PENDING') riskBadge(normRisk(w.risk), c);
+    autoBadge(w.auto, c);
 
     if (w.status === 'PENDING') {
       // ⏸ 보류(11/08) — 보내지 않고 다음 점검 때 다시 본다. 서버도 승인을 409 on_hold 로 막는다.
